@@ -57,3 +57,41 @@ Parsers live in `src/homefile/parsers.py` and are pure functions over a `Page`. 
 
 Do not make a parser depend on a model. Deterministic parsing is the baseline that the optional provider can only supplement, never replace.
 
+## Adding a provider
+
+Providers live in `src/homefile/providers.py` behind the `ModelProvider` protocol:
+
+```python
+name: str
+model: str
+is_remote: bool
+
+def count_tokens(self, request: CompletionRequest) -> int: ...
+def complete(self, request: CompletionRequest) -> CompletionResponse: ...
+def stream(self, request: CompletionRequest) -> Iterator[StreamEvent]: ...
+```
+
+1. Implement all members of the protocol. `complete` must return token counts, a request id, latency, and an estimated cost; `stream` must end with `StreamEvent(delta="", done=True)`.
+2. Wire the adapter into `build_provider`. Fail closed: a remote provider must require `HOMEFILE_ALLOW_NETWORK=1`, explicit configuration, and, for paid endpoints, non-zero run and daily cost caps plus explicit per-1k prices.
+3. Never call the adapter directly from business logic. `ProviderGuard` enforces the request, token, and cost caps and writes the ledger; bypassing it would make spend invisible.
+4. Validate model output with `validate_extraction_payload` before it reaches the service. Fields without a quote, unknown field names, and unknown document types must be dropped or rejected.
+5. Add a fake-network test. The suite blocks sockets globally, so mock the transport (for example `urllib.request.urlopen`) and assert the request shape, the parsed response, and the failure path for malformed output. A test that would reach a real endpoint is not acceptable, even if it is skipped when offline.
+6. Update the environment-variable table in `README.md` if you add a setting.
+
+Providers must not log document text, API keys, or request bodies.
+
+## Privacy rules for contributors
+
+- Never commit a real receipt, invoice, contract, statement, ID, or scan. Do not commit personal names, addresses, account numbers, or serial numbers that belong to a real person or product.
+- Use the synthetic documents from `homefile samples` or the fixtures module. If you need a new sample, generate it in code and keep the content fictional.
+- Do not paste real document text into issues, pull requests, test names, or screenshots. Redact first; better, reproduce with a generated fixture.
+- Do not add telemetry, analytics, remote logging, or a default network call. The default install must stay offline.
+- Do not weaken the socket-blocking fixture in `tests/conftest.py`. If a test needs network behavior, mock the transport.
+
+## Review expectations
+
+- A maintainer reviews every change. Expect questions about failure modes, citations, and privacy before style.
+- Pull requests should include tests for new behavior and a `CHANGELOG.md` entry under `[Unreleased]` when the change is user-visible.
+- Keep changes scoped. Refactors that are not needed for the fix should be separate.
+- Security fixes may be merged quickly and without prior public discussion; see [SECURITY.md](SECURITY.md) and [GOVERNANCE.md](GOVERNANCE.md).
+- Review is a conversation about the code, not the person. Be specific, assume good faith, and explain the reasoning behind a request.
