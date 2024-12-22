@@ -102,3 +102,102 @@ Every command except `serve` prints JSON by default. Add `--human` before the su
 
 Global options: `--data-dir <path>` and `--human`.
 
+## Configuration
+
+Settings come from environment variables. Defaults are local-only and cost zero.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `HOMEFILE_DATA_DIR` | platform per-user data directory | Library root. Windows: `%LOCALAPPDATA%\homefile`; otherwise `$XDG_DATA_HOME/homefile` or `~/.local/share/homefile`. |
+| `HOMEFILE_MAX_FILE_MB` | `25` | Maximum input file size in mebibytes. |
+| `HOMEFILE_MAX_PAGES` | `200` | Maximum pages per PDF. |
+| `HOMEFILE_MAX_PAGE_CHARS` | `200000` | Maximum characters kept per page; longer text is truncated with a warning. |
+| `HOMEFILE_CONFIRM_BELOW` | `0.8` | Confidence below which the web UI marks a field as needing review. |
+| `HOMEFILE_ALLOW_NETWORK` | `false` | Required before the Ollama or cloud provider can be constructed. |
+| `HOMEFILE_PROVIDER` | `fake` | `fake`, `ollama`, or `cloud`. |
+| `HOMEFILE_RUN_REQUEST_CAP` | `20` | Maximum provider requests per run. |
+| `HOMEFILE_RUN_TOKEN_CAP` | `20000` | Maximum input tokens per run. |
+| `HOMEFILE_RUN_COST_CAP_USD` | `0` | Maximum estimated cost per run. Must be non-zero for `cloud`. |
+| `HOMEFILE_DAILY_COST_CAP_USD` | `0` | Maximum estimated cost per UTC day. Must be non-zero for `cloud`. |
+| `HOMEFILE_OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint. |
+| `HOMEFILE_OLLAMA_MODEL` | `llama3.2` | Ollama model name. |
+| `HOMEFILE_CLOUD_BASE_URL` | empty | OpenAI-compatible base URL. Required for `cloud`. |
+| `HOMEFILE_CLOUD_MODEL` | empty | Cloud model name. Required for `cloud`. |
+| `HOMEFILE_CLOUD_INPUT_PRICE_PER_1K` | unset | Input price per 1000 tokens. Required for `cloud`. |
+| `HOMEFILE_CLOUD_OUTPUT_PRICE_PER_1K` | unset | Output price per 1000 tokens. Required for `cloud`. |
+| `HOMEFILE_CLOUD_API_KEY_ENV` | `HOMEFILE_CLOUD_API_KEY` | Name of the environment variable that holds the cloud API key. |
+
+Example opt-in to a local Ollama instance:
+
+```bash
+export HOMEFILE_ALLOW_NETWORK=1
+export HOMEFILE_PROVIDER=ollama
+homefile import ./samples/receipt.pdf
+```
+
+## Architecture
+
+```text
+CLI (cli.py)                    Web UI (web/server.py, web/pages.py)
+      \                              /
+       Library (service.py)
+      /        |             \
+ SQLite      encrypted blobs   providers
+ (db.py)     (store.py,        (providers.py,
+             crypto.py)        ProviderGuard)
+      |
+ inspect.py -> extract.py -> classify.py / parsers.py
+```
+
+The `Library` class is the only place that changes state. The CLI and HTTP server are thin adapters over it; every route and command calls the same methods. Original bytes are content-addressed by SHA-256 and sealed with AES-256-GCM before they reach disk. Page text and derived records live in SQLite, with an FTS5 external-content index over pages. Providers sit behind a narrow `ModelProvider` protocol and are wrapped by `ProviderGuard`, which enforces request, token, run-cost, and daily-cost caps and writes a ledger row for every call.
+
+Data directory layout:
+
+```text
+<data-dir>/
+  homefile.sqlite3   documents, pages, fields, history, reminders, ledger
+  key.bin            locally generated 32-byte AES key
+  blobs/             encrypted originals, named <sha256>.hbf
+  exports/           export bundles
+```
+
+See [docs/architecture.md](docs/architecture.md) for the full picture, [docs/operations.md](docs/operations.md) for install, backup, and troubleshooting, and [docs/decisions/](docs/decisions/) for recorded design decisions.
+
+## Privacy
+
+- The default provider never opens a socket. The test suite also blocks socket connections, so an accidental network call fails the tests.
+- Original files are encrypted at rest. `key.bin` is created locally with owner-only permissions where the platform supports them; it is not passphrase-protected, so anyone who can read the data directory can decrypt the blobs.
+- Page text, extracted fields, citations, correction history, reminders, and provider ledger entries are stored as plaintext in `homefile.sqlite3`. The database is not encrypted.
+- Exports are plaintext `.zip` files unless you pass `--passphrase`, in which case the bundle is encrypted with AES-256-GCM and an scrypt-derived key.
+- The web UI binds to loopback only, uses a per-process CSRF token in a strict cookie and in every form, rejects cross-origin submissions, sets a restrictive content security policy, and loads no external assets.
+- File inspection enforces size and page limits and rejects PDFs containing JavaScript, embedded files, or encryption. It is not an antivirus or malware scanner.
+
+More detail is in [docs/privacy.md](docs/privacy.md) and [docs/threat-model.md](docs/threat-model.md).
+
+## What this project does not do
+
+- It does not give legal, financial, tax, or insurance advice, and it does not interpret contract terms. Extracted values are candidates for you to confirm.
+- It does not cancel subscriptions, make payments, or contact vendors.
+- It is not a hosted or multi-user service. There are no accounts, sharing, sync, or remote access.
+- It does not promise OCR accuracy. OCR is optional and local; pages without a text layer are flagged rather than guessed.
+
+## Verification
+
+Run these before sending a change:
+
+```bash
+ruff check .
+mypy
+pytest -q
+python -m homefile smoke --work-dir .smoke-ci
+```
+
+The smoke command runs the whole workflow on synthetic documents and exits non-zero if any promise fails. It does not clear an existing `--work-dir`; delete `.smoke-ci` before re-running locally. CI runs the same four gates on Linux and Windows.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [GOVERNANCE.md](GOVERNANCE.md), and the [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
