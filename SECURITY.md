@@ -42,3 +42,32 @@ These are goals, not contractual promises. This is a volunteer project with a si
 
 If a report is out of scope, the response will explain why and, where possible, point to the component that owns the issue.
 
+## Scope
+
+In scope:
+
+- The local application: the CLI, the loopback HTTP server, and the service layer.
+- File upload and import handling, including multipart parsing, filename handling, media-type detection, and the PDF and image inspection limits.
+- CSRF protection, same-origin checks, cookie handling, content security policy, and static file serving in the web UI.
+- Cryptography: blob sealing and opening, the export container, key generation and storage, and passphrase handling.
+- Export behavior, including the fact that exports are plaintext unless a passphrase is supplied.
+- Deletion and integrity verification, including whether derived records or blobs survive deletion.
+- Path handling under the data directory, and any way to make the application read or write outside it.
+- Injection into SQLite queries or into generated HTML.
+
+## Non-goals
+
+The following are not treated as vulnerabilities in this project:
+
+- An attacker who already has read access to your operating system account or your data directory. The master key sits next to the encrypted blobs by design; this protects against casual disk inspection and lost backups, not against a compromised account.
+- Physical access to an unlocked machine, or malware running as your user.
+- The absence of antivirus or general malware scanning. Inspection rejects active PDF features and enforces size and page limits, but it is not a scanner.
+- Denial of service through inputs that exceed documented limits, or through a local process consuming its own CPU and disk. The limits are the mitigation.
+- Vulnerabilities in third-party services you explicitly configure (Ollama, an OpenAI-compatible endpoint) or in Tesseract. Report those upstream; this project can still document a workaround.
+- Vulnerabilities in dependencies that have no reachable path in this code. Dependabot and `pip-audit` track them.
+- Missing features such as multi-user authentication, remote access, or encryption of the SQLite database. These are documented limitations, not defects.
+- Social engineering, and reports generated solely by an automated scanner without a demonstrated impact.
+
+## Threat model
+
+The threat model, including assets, trust boundaries, and the controls that are intentionally absent, lives in [docs/threat-model.md](docs/threat-model.md). Read it before reporting so the report can say which boundary was crossed.
