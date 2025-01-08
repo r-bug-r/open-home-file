@@ -103,3 +103,98 @@ One motion personality per product: **Snap** for developer tools, **Silk** for H
 - No animated KPI numbers, infinite ambient loops, parallax, or delayed primary content.
 - Honor `prefers-reduced-motion` by removing transforms and keeping state changes immediate.
 
+### 1.5 Accessibility and responsive gates
+
+Before a UI release:
+
+- Run axe-core and fix all serious/critical findings; document accepted false positives.
+- Tab through every flow without a mouse; focus must remain visible and ordered.
+- Test with a screen reader on the primary workflow and verify headings, labels, status announcements, dialog focus, and table relationships.
+- Meet WCAG 2.2 AA contrast targets: 4.5:1 normal text, 3:1 large text and essential UI indicators.
+- Use 44px minimum touch targets for compact controls where practical; never make a primary action smaller than 44px high.
+- Use `aria-live="polite"` for asynchronous result/status updates and `role="alert"` only for urgent errors.
+- Test zoom at 200% and text-only reflow at 320px.
+- Check `document.documentElement.scrollWidth - document.documentElement.clientWidth === 0` at 390px, 768px, 1024px, and 1440px.
+- Render screenshots at each breakpoint and inspect them for overlap, clipping, ragged alignment, unreadable density, and broken focus states.
+- Use `min-width: 0`, `overflow-wrap: anywhere`, wrapping toolbars, reserved status heights, and `body { overflow-x: clip; }` as a backstop. The backstop does not replace root-cause fixes.
+
+### 1.6 UI implementation sequence
+
+1. Write the task flow and acceptance states.
+2. Create tokens and a semantic component inventory.
+3. Design the primary screen in a plain local fixture with real-length copy.
+4. Add all states before adding visual polish.
+5. Implement keyboard and screen-reader behavior.
+6. Add responsive rules and verify narrow overflow.
+7. Add restrained motion and reduced-motion behavior.
+8. Run browser screenshots, axe checks, and a fresh-eyes critique.
+9. Fix measured gates first, then deliberate visual signals.
+10. Record the design decision and ship a changelog entry.
+
+---
+
+---
+
+# 6. UI/UX Plan: Open Home File
+
+## User task
+
+A person imports a document, verifies extracted fields against the source, corrects an error, creates a reminder, and can later export or delete everything.
+
+**Primary task flow:** import -> process locally -> inspect citation -> correct -> confirm reminder -> search later -> export/delete.
+
+## Information architecture
+
+- **Home:** upcoming deadlines, recent documents, processing queue.
+- **Documents:** search, filters, document list, import.
+- **Document detail:** source preview, extracted fields, citations, correction history.
+- **Reminders:** upcoming, dismissed, completed, and source document.
+- **Settings:** local/cloud mode, storage location, retention, export, deletion.
+
+## Visual direction
+
+Use calm editorial utility: warm paper canvas, clear document outline, restrained green for confirmed state, amber for needs review, and no dense dashboard chrome. The memorable anchor is a **citation rail** that visually links each extracted field to a page or text range in the original document.
+
+## Screens and acceptance criteria
+
+### A. Home and import
+
+Make import the primary action. Show local-only status prominently. Use a drop zone plus file picker, with file-type and size rules before processing.
+
+States:
+
+- First-run empty state with a synthetic sample option.
+- Processing queue with per-document state.
+- Unsupported file, oversized file, OCR failure, and partial extraction states.
+- Offline state that explains local processing remains available.
+
+### B. Document detail
+
+Desktop: source preview on the left, extracted fields in the center, citation/metadata rail on the right. Mobile: source and field sections stack; selecting a field scrolls to the citation and announces the connection.
+
+Fields show value, confidence, source page/offset, last corrected time, and correction action. Reminder creation is adjacent to date fields and requires confirmation below the confidence threshold.
+
+Acceptance:
+
+- Every reminder has a source citation.
+- A correction never removes the original extracted value from history.
+- A user can tell whether the document stayed local or was sent to a provider.
+
+### C. Search and reminders
+
+Use real search terms and document-type filters. Empty search has an actionable explanation. Reminder rows show due date, source document, status, and quick complete/snooze controls.
+
+### D. Privacy and deletion
+
+Settings must show storage path, processing mode, provider status, retained data classes, export, and delete-all controls. Delete confirmation names originals, OCR, thumbnails, indexes, reminders, and backups that will be affected.
+
+## UI verification
+
+- Import synthetic receipt and warranty fixture.
+- Correct warranty date, confirm reminder, search by vendor/serial, export, delete, and verify no result remains.
+- Run local-only mode with network disabled; verify the UI does not imply cloud processing.
+- Test citation focus and keyboard operation.
+- Axe scan, 200% zoom, 320px reflow, and narrow overflow check.
+- Review screenshots for document readability, source/field relationship, and absence of nested-card clutter.
+
+---
