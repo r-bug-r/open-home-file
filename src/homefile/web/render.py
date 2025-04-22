@@ -1,0 +1,186 @@
+"""Shared HTML rendering helpers.
+
+Everything is rendered on the server with the standard library only: no
+template engine, no build step, no external asset. Every value that comes from
+a document or the database passes through :func:`esc`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from datetime import date, datetime
+from html import escape
+from typing import Any
+
+APP_NAME = "Open Home File"
+
+
+def esc(value: Any) -> str:
+    """Escape any value for HTML text or attribute context."""
+    return escape("" if value is None else str(value), quote=True)
+
+
+def fmt_date(value: date | datetime | str | None) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, datetime):
+        return value.strftime("%d %b %Y, %H:%M")
+    if isinstance(value, date):
+        return value.strftime("%d %b %Y")
+    return str(value)
+
+
+def fmt_bytes(size: int) -> str:
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
+def nav(active: str) -> str:
+    items = [
+        ("home", "/", "Home"),
+        ("documents", "/documents", "Documents"),
+        ("reminders", "/reminders", "Reminders"),
+        ("settings", "/settings", "Settings"),
+    ]
+    def link(key: str, href: str, label: str) -> str:
+        current = key == active
+        classes = "nav-link is-active" if current else "nav-link"
+        marker = "" if not current else ' aria-current="page"' 
+        return f'<li><a class="{classes}"{marker} href="{href}">{esc(label)}</a></li>'
+
+    links = "".join(link(key, href, label) for key, href, label in items)
+    return f'<ul class="nav-list">{links}</ul>'
+
+
+def layout(
+    *,
+    title: str,
+    body: str,
+    active: str,
+    notice: str | None = None,
+    error: str | None = None,
+    local_only: bool = True,
+    footer_note: str = "",
+) -> str:
+    banner = ""
+    if notice:
+        banner += f'<p class="flash flash-ok" role="status">{esc(notice)}</p>'
+    if error:
+        banner += f'<p class="flash flash-error" role="alert">{esc(error)}</p>'
+    mode = (
+        '<span class="mode mode-local"><span aria-hidden="true">●</span> Local only</span>'
+        if local_only
+        else '<span class="mode mode-cloud"><span aria-hidden="true">◆</span> Cloud provider enabled</span>'
+    )
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(title)} · {esc(APP_NAME)}</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="app-header">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">▤</span> {esc(APP_NAME)}</a>
+  <nav aria-label="Primary">{nav(active)}</nav>
+  <div class="header-status">{mode}</div>
+</header>
+<main id="main" class="app-main">
+{banner}
+{body}
+</main>
+<footer class="app-footer">
+  <p>Documents stay in {esc(footer_note or "your local library")}. No telemetry, no uploads.</p>
+</footer>
+<script src="/static/app.js" defer></script>
+</body>
+</html>
+"""
+
+
+def page_header(title: str, subtitle: str = "", actions: str = "") -> str:
+    sub = f'<p class="page-subtitle">{esc(subtitle)}</p>' if subtitle else ""
+    action_block = f'<div class="page-actions">{actions}</div>' if actions else ""
+    return f"""<div class="page-header">
+  <div>
+    <h1>{esc(title)}</h1>
+    {sub}
+  </div>
+  {action_block}
+</div>"""
+
+
+def badge(text: str, tone: str = "neutral") -> str:
+    return f'<span class="badge badge-{esc(tone)}">{esc(text)}</span>'
+
+
+def status_badge(status: str) -> str:
+    tones = {
+        "extracted": "warn",
+        "confirmed": "ok",
+        "rejected": "danger",
+        "suggested": "warn",
+        "dismissed": "muted",
+        "done": "ok",
+    }
+    return badge(status.replace("_", " "), tones.get(status, "neutral"))
+
+
+def empty_state(title: str, detail: str, action: str = "") -> str:
+    action_block = f'<div class="empty-action">{action}</div>' if action else ""
+    return f"""<div class="empty-state">
+  <p class="empty-title">{esc(title)}</p>
+  <p class="empty-detail">{esc(detail)}</p>
+  {action_block}
+</div>"""
+
+
+def table(headers: Iterable[str], rows: Iterable[str], caption: str) -> str:
+    head = "".join(f'<th scope="col">{esc(item)}</th>' for item in headers)
+    body = "".join(rows)
+    return f"""<div class="table-wrap">
+<table>
+  <caption class="visually-hidden">{esc(caption)}</caption>
+  <thead><tr>{head}</tr></thead>
+  <tbody>{body}</tbody>
+</table>
+</div>"""
+
+
+def field_label(name: str) -> str:
+    return name.replace("_", " ")
+
+
+def confidence_meter(confidence: float, threshold: float) -> str:
+    percent = max(0, min(100, round(confidence * 100)))
+    tone = "ok" if confidence >= threshold else "warn"
+    hint = (
+        "needs review"
+        if confidence < threshold
+        else "above confirmation threshold"
+    )
+    return (
+        f'<span class="confidence confidence-{tone}">'
+        f'<span class="confidence-track" aria-hidden="true">'
+        f'<span class="confidence-fill" style="width:{percent}%"></span></span>'
+        f'<span class="confidence-text">{percent}% · {esc(hint)}</span></span>'
+    )
+
+
+def highlight(text: str, start: int, end: int) -> str:
+    """Escape ``text`` and wrap the cited span in a ``<mark>`` element."""
+    start = max(0, min(start, len(text)))
+    end = max(start, min(end, len(text)))
+    before = esc(text[:start])
+    marked = esc(text[start:end])
+    after = esc(text[end:])
+    if not marked:
+        return before + after
+    return f'{before}<mark id="citation-target" class="citation-mark">{marked}</mark>{after}'
