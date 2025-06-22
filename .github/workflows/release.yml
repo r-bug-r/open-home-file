@@ -1,0 +1,41 @@
+name: Release
+
+# Publishing is manual. This workflow only builds and verifies the artifacts;
+# it never uploads to a package registry.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist and wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install project and build tool
+        run: pip install -e ".[dev]" build
+
+      - name: Test
+        run: pytest -q
+
+      - name: Build
+        run: python -m build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
