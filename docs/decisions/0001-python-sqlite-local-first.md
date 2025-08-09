@@ -18,3 +18,15 @@ blob directory, one key file. There is no daemon, job queue, or external
 service in the default configuration. The CLI and the web layer are adapters
 over one `Library` object; neither owns business rules or SQL.
 
+## Consequences
+
+- Installation is `pip install -e .` plus a Python interpreter. No native
+  packaging step and no Electron download.
+- The web UI can be stopped by stopping the process; there is no supervisor,
+  no restart policy, and no background processing to reason about.
+- Everything is single-user and single-machine. Concurrency is limited to the
+  server's request threads over SQLite with a 15-second busy timeout.
+- There is no remote access story. Adding one would require authentication,
+  TLS, and a different storage decision, so it is out of scope.
+- Python's startup time makes short CLI calls slower than a native binary; this
+  was accepted for auditability and dependency simplicity.
