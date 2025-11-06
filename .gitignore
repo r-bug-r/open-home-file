@@ -19,3 +19,5 @@ test-results/
 .smoke-web/
 .smoke-ci/
 samples/
+.ui-check/
+.ui-tmp/
