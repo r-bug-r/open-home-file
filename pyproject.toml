@@ -10,10 +10,27 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Open Home File contributors" }]
+keywords = ["local-first", "household", "documents", "privacy", "sqlite", "cli"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business",
+]
 dependencies = [
   "cryptography>=42",
   "pypdf>=5",
 ]
+
+[project.urls]
+Homepage = "https://r-bug-r.github.io/open-home-file/"
+Repository = "https://github.com/r-bug-r/open-home-file"
+Issues = "https://github.com/r-bug-r/open-home-file/issues"
+Changelog = "https://github.com/r-bug-r/open-home-file/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
 ocr = ["pytesseract>=0.3.10", "Pillow>=10"]
