@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS documents (
     doc_type TEXT NOT NULL,
     doc_type_confidence REAL NOT NULL,
     imported_at TEXT NOT NULL,
-    title TEXT NOT NULL DEFAULT ''
+    title TEXT NOT NULL DEFAULT '',
+    processed_by TEXT NOT NULL DEFAULT '',
+    warnings TEXT NOT NULL DEFAULT '[]'
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS pages (
@@ -183,6 +185,14 @@ def init_db(path: Path) -> None:
                 conn.execute(
                     "ALTER TABLE deletion_log ADD COLUMN actor TEXT NOT NULL DEFAULT 'local-user'"
                 )
+        if version < 4:
+            columns = {info["name"] for info in conn.execute("PRAGMA table_info(documents)")}
+            if "processed_by" not in columns:
+                conn.execute(
+                    "ALTER TABLE documents ADD COLUMN processed_by TEXT NOT NULL DEFAULT ''"
+                )
+            if "warnings" not in columns:
+                conn.execute("ALTER TABLE documents ADD COLUMN warnings TEXT NOT NULL DEFAULT '[]'")
         conn.execute(
             "INSERT INTO schema_meta(key, value) VALUES('version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
