@@ -50,6 +50,20 @@ def run_smoke(work_dir: Path | None = None) -> dict[str, Any]:
         Path(work_dir) if work_dir is not None else Path(tempfile.mkdtemp(prefix="homefile-smoke-"))
     )
     root.mkdir(parents=True, exist_ok=True)
+    # The scenario asserts first-import behaviour, so a library left by an
+    # earlier run would report duplicate imports as failures with misleading
+    # messages. Say what is actually wrong instead.
+    existing_db = root / "library" / "homefile.sqlite3"
+    if existing_db.exists():
+        return {
+            "ok": False,
+            "ran_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "steps": [],
+            "failures": [
+                f"{root} already contains a library from an earlier run; "
+                "delete it or pass an empty --work-dir"
+            ],
+        }
     samples = fixtures.write_samples(root / "samples")
     settings = Settings(data_dir=root / "library")
     library = Library(settings, ocr=NullOcr())
