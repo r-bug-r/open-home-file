@@ -29,6 +29,18 @@
     return mark;
   }
 
+  function activateTab(workspace, tab) {
+    var pageNo = tab.getAttribute("data-page-tab");
+    workspace.querySelectorAll("[data-page-tab]").forEach(function (item) {
+      var selected = item === tab;
+      item.setAttribute("aria-selected", selected ? "true" : "false");
+      item.setAttribute("tabindex", selected ? "0" : "-1");
+    });
+    workspace.querySelectorAll("[data-page-panel]").forEach(function (panel) {
+      panel.hidden = panel.getAttribute("data-page-panel") !== pageNo;
+    });
+  }
+
   function selectField(row, options) {
     var settings = options || {};
     var workspace = document.querySelector("[data-workspace]");
@@ -47,10 +59,7 @@
     var confidence = row.getAttribute("data-confidence") || "";
 
     workspace.querySelectorAll("[data-page-tab]").forEach(function (tab) {
-      tab.setAttribute("aria-selected", tab.getAttribute("data-page-tab") === pageNo ? "true" : "false");
-    });
-    workspace.querySelectorAll("[data-page-panel]").forEach(function (panel) {
-      panel.hidden = panel.getAttribute("data-page-panel") !== pageNo;
+      if (tab.getAttribute("data-page-tab") === pageNo) activateTab(workspace, tab);
     });
 
     var pageEl = workspace.querySelector('[data-page-panel="' + pageNo + '"] .source-text');
@@ -111,27 +120,44 @@
     var workspace = document.querySelector("[data-workspace]");
     if (!workspace) return;
 
+    var narrow = window.matchMedia("(max-width: 48rem)");
+
     workspace.querySelectorAll(".field-row").forEach(function (row) {
       row.addEventListener("click", function (event) {
         if (event.metaKey || event.ctrlKey || event.shiftKey) return;
         event.preventDefault();
         selectField(row);
         var citation = workspace.querySelector("[data-citation-pane]");
-        if (citation && citation.focus) {
-          citation.focus({ preventScroll: true });
+        if (!citation) return;
+        // On a narrow screen the citation sits below the field list, so move
+        // the viewport there instead of only moving focus off-screen. The
+        // header is sticky and wraps to two rows on narrow screens, so measure
+        // it instead of assuming a fixed height.
+        if (narrow.matches && citation.scrollIntoView) {
+          var header = document.querySelector(".app-header");
+          var offset = (header ? header.getBoundingClientRect().height : 0) + 12;
+          var top = citation.getBoundingClientRect().top + window.pageYOffset - offset;
+          window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
         }
+        citation.focus({ preventScroll: true });
       });
     });
 
-    workspace.querySelectorAll("[data-page-tab]").forEach(function (tab) {
+    var tabs = Array.prototype.slice.call(workspace.querySelectorAll("[data-page-tab]"));
+    tabs.forEach(function (tab, index) {
       tab.addEventListener("click", function () {
-        var pageNo = tab.getAttribute("data-page-tab");
-        workspace.querySelectorAll("[data-page-tab]").forEach(function (item) {
-          item.setAttribute("aria-selected", item === tab ? "true" : "false");
-        });
-        workspace.querySelectorAll("[data-page-panel]").forEach(function (panel) {
-          panel.hidden = panel.getAttribute("data-page-panel") !== pageNo;
-        });
+        activateTab(workspace, tab);
+      });
+      tab.addEventListener("keydown", function (event) {
+        var next = null;
+        if (event.key === "ArrowRight") next = tabs[(index + 1) % tabs.length];
+        else if (event.key === "ArrowLeft") next = tabs[(index - 1 + tabs.length) % tabs.length];
+        else if (event.key === "Home") next = tabs[0];
+        else if (event.key === "End") next = tabs[tabs.length - 1];
+        if (!next) return;
+        event.preventDefault();
+        activateTab(workspace, next);
+        next.focus();
       });
     });
 
@@ -178,6 +204,45 @@
     });
   }
 
+  function initImportQueue() {
+    document.querySelectorAll("[data-dropzone]").forEach(function (zone) {
+      var input = zone.querySelector('input[type="file"]');
+      var queue = zone.querySelector("[data-import-queue]");
+      if (!input || !queue) return;
+      zone.addEventListener("submit", function (event) {
+        if (event.defaultPrevented) return;
+        var files = input.files ? Array.prototype.slice.call(input.files) : [];
+        if (!files.length) return;
+        queue.hidden = false;
+        queue.innerHTML = "";
+        var title = document.createElement("p");
+        title.className = "import-queue-title";
+        title.textContent = "Processing " + files.length + " file(s) locally…";
+        queue.appendChild(title);
+        var list = document.createElement("ul");
+        list.className = "import-queue-list";
+        files.forEach(function (file) {
+          var item = document.createElement("li");
+          var name = document.createElement("span");
+          name.textContent = file.name;
+          var state = document.createElement("span");
+          state.className = "hint";
+          state.textContent = "queued";
+          item.appendChild(name);
+          item.appendChild(state);
+          list.appendChild(item);
+        });
+        queue.appendChild(list);
+        var submit = zone.querySelector('button[type="submit"]');
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = "Importing…";
+        }
+        zone.setAttribute("aria-busy", "true");
+      });
+    });
+  }
+
   function initSearchShortcut() {
     document.addEventListener("keydown", function (event) {
       if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -205,7 +270,8 @@
   document.addEventListener("DOMContentLoaded", function () {
     initWorkspace();
     initDropzone();
-    initSearchShortcut();
     initConfirm();
+    initImportQueue();
+    initSearchShortcut();
   });
 })();
