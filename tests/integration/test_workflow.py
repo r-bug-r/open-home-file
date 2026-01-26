@@ -267,6 +267,62 @@ def test_export_requires_a_document(library: Library) -> None:
         library.export_document("doc-missing", passphrase="x")
 
 
+def test_library_export_round_trips_every_document(
+    library: Library, sample_paths: dict[str, Path]
+) -> None:
+    outcomes = import_samples(library, sample_paths)
+    path = library.export_library(passphrase="library passphrase")
+    assert path.suffix == ".hfe"
+    assert b"NORTHWIND" not in path.read_bytes()
+
+    restored = library.read_export(path, passphrase="library passphrase")
+    metadata = restored["metadata"]
+    assert metadata["format"] == "open-home-file/library-export/1"
+    assert metadata["counts"] == {"documents": 3, "originals": 3}
+    exported_ids = {item["document"]["id"] for item in metadata["documents"]}
+    assert exported_ids == {outcome.document.id for outcome in outcomes.values()}
+    assert all(item["fields"] for item in metadata["documents"])
+    assert len(restored["original_hashes"]) == 3
+
+
+def test_library_export_without_passphrase_is_a_plain_zip(
+    library: Library, sample_paths: dict[str, Path]
+) -> None:
+    import_samples(library, sample_paths)
+    path = library.export_library(passphrase=None)
+    assert path.suffix == ".zip"
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        assert "metadata.json" in names
+        assert sum(name.startswith("originals/") for name in names) == 3
+
+
+def test_recent_imports_reports_each_attempt_newest_first(
+    library: Library, sample_paths: dict[str, Path]
+) -> None:
+    library.import_file(sample_paths["receipt.pdf"])
+    library.import_file(sample_paths["receipt.pdf"])
+    records = library.recent_imports()
+    assert [record.status for record in records[:2]] == ["duplicate", "imported"]
+    assert records[0].doc_id == records[1].doc_id
+    assert records[0].filename == "receipt.pdf"
+    assert [record.imported_at for record in records] == sorted(
+        (record.imported_at for record in records), reverse=True
+    )
+
+
+def test_import_samples_is_idempotent_and_local(library: Library) -> None:
+    first = library.import_samples()
+    assert len(first) == 3
+    assert not any(outcome.duplicate for outcome in first)
+    assert all(outcome.document.stayed_local for outcome in first)
+    assert all(outcome.fields for outcome in first)
+
+    second = library.import_samples()
+    assert all(outcome.duplicate for outcome in second)
+    assert len(library.list_documents()) == 3
+
+
 def test_deletion_removes_every_derived_artifact(
     library: Library, sample_paths: dict[str, Path]
 ) -> None:
