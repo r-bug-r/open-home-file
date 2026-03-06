@@ -25,10 +25,11 @@ leaves the machine. It describes the code in `src/homefile/` as it exists.
 | Original PDF, PNG, or JPEG bytes | `blobs/<sha256>.hbf` | AES-256-GCM, key in `key.bin`, content hash bound as associated data |
 | Page text and the FTS5 index | `pages.text`, `pages_fts` in `homefile.sqlite3` | none; plaintext |
 | Extracted fields and citations | `fields`, `field_history` | none; plaintext |
+| Document provenance and processing notes | `documents.processed_by`, `documents.warnings` | none; names a remote provider only when one was used, never document text |
 | Reminders | `reminders` | none; plaintext |
 | Provider ledger | `ledger` | none; contains provider, model, token counts, estimated cost, and error class, never prompts or responses |
-| Import and deletion records | `imports`, `deletion_log` | none; deletion rows deliberately exclude document content and filename |
-| Export bundles | `exports/<doc-id>-<timestamp>.zip` or `.hfe` | plaintext zip by default; AES-256-GCM with an scrypt-derived key when a passphrase is supplied |
+| Import and deletion records | `imports`, `deletion_log` | none; import rows keep the sanitized filename and an error class; deletion rows deliberately exclude document content and filename |
+| Export bundles | `exports/<doc-id>-<timestamp>.zip`/`.hfe`, or `exports/library-<timestamp>.zip`/`.hfe` | plaintext zip by default; AES-256-GCM with an scrypt-derived key when a passphrase is supplied |
 | Library key | `key.bin` | mode 0600 on POSIX; on Windows the profile ACL governs access |
 
 `key.bin` sits beside the ciphertext. Anyone who can read the whole data
@@ -51,8 +52,9 @@ Three things can change that, and all are explicit:
    named by `HOMEFILE_CLOUD_API_KEY_ENV`. This requires network access, a base
    URL, a model, both prices, non-zero per-run and daily cost caps, and the
    key. A zero cap refuses every paid call.
-3. **You export a document and move the bundle yourself.** Exports are not
-   uploaded; they are written to `exports/` inside the data directory.
+3. **You export a document or the whole library and move the bundle
+   yourself.** Exports are not uploaded; they are written to `exports/`
+   inside the data directory.
 
 The test suite blocks socket connections, so an accidental network call in the
 default configuration fails the tests rather than passing silently.
@@ -92,6 +94,10 @@ Ollama on loopback if the text must stay on the machine.
   are no fonts, images, or scripts fetched from a third party.
 - The `homefile_csrf` cookie is `HttpOnly` and `SameSite=Strict`, and is not
   marked `Secure` because the server is plain HTTP on loopback.
+- The header shows the processing mode. A document detail page states whether
+  it was processed locally or sent to a named remote provider, using
+  `documents.processed_by`. The fake provider and a local Ollama instance are
+  reported as local.
 
 ## 6. Retention and deletion
 
