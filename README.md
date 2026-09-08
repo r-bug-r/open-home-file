@@ -1,6 +1,16 @@
 # Open Home File
 
+[![CI](https://github.com/r-bug-r/open-home-file/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/r-bug-r/open-home-file/actions/workflows/ci.yml)
+
 Open Home File is a local-first index for household documents. It imports PDF, PNG, and JPEG files, stores the originals encrypted, extracts page text, classifies each document, pulls out the fields that matter (vendor, amount, serial number, dates, deadlines), attaches a page-and-character citation to every extracted value, and turns confirmed deadlines into reminders. A loopback-only web UI and a JSON-first CLI read and write the same SQLite library.
+
+<p align="center">
+  <a href="https://r-bug-r.github.io/open-home-file/">
+    <img src="docs/assets/og.png" alt="Open Home File — the paper trail, finally legible." width="960">
+  </a>
+</p>
+
+Project page: <https://r-bug-r.github.io/open-home-file/>
 
 ## Status
 
@@ -25,6 +35,8 @@ The storage format, CLI flags, and HTTP routes may change before 1.0. There is n
 ## Install
 
 ```bash
+git clone https://github.com/r-bug-r/open-home-file.git
+cd open-home-file
 python -m venv .venv
 ```
 
@@ -38,13 +50,13 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 ```
 
-Install the project and development tools:
+Install the project:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e .
 ```
 
-This installs the `homefile` console script. `python -m homefile` behaves identically.
+This installs the `homefile` console script. `python -m homefile` behaves identically. For the development tools used below, install the dev extras instead: `pip install -e ".[dev]"`.
 
 ## 60-second quickstart
 
@@ -92,6 +104,7 @@ Every command except `serve` prints JSON by default. Add `--human` before the su
 | `dismiss-reminder <reminder-id>` | Dismiss a reminder. `--reason` is required. |
 | `due` | List confirmed reminders whose due date is today or earlier. |
 | `export <doc-id> [--passphrase]` | Write a bundle containing metadata, pages, fields, history, and the original. With a passphrase the bundle is encrypted as `.hfe`; without one it is a plain `.zip`. |
+| `export-all [--passphrase]` | Write one archive containing every document, field, reminder, page, and distinct original. Encrypted as `.hfe` when a passphrase is supplied. |
 | `delete <doc-id>` | Delete the document and derived records, then verify that no rows or blobs remain. |
 | `verify` | Check every stored blob against its SHA-256 and report problems. Exit code 1 on failure. |
 | `stats` | Show document, page, field, reminder, and spend counts. |
@@ -161,7 +174,7 @@ Data directory layout:
   exports/           export bundles
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the full picture, [docs/operations.md](docs/operations.md) for install, backup, and troubleshooting, and [docs/decisions/](docs/decisions/) for recorded design decisions.
+See [docs/architecture.md](docs/architecture.md) for the full picture, [docs/operations.md](docs/operations.md) for install, backup, and troubleshooting, and [docs/decisions/](docs/decisions/) for recorded design decisions. The public project page is [docs/index.html](docs/index.html); it is static, self-hosted, and has no third-party requests.
 
 ## Privacy
 
@@ -183,7 +196,7 @@ More detail is in [docs/privacy.md](docs/privacy.md) and [docs/threat-model.md](
 
 ## Verification
 
-Run these before sending a change:
+Run these before sending a change (after installing the dev extras):
 
 ```bash
 ruff check .
@@ -193,6 +206,8 @@ python -m homefile smoke --work-dir .smoke-ci
 ```
 
 The smoke command runs the whole workflow on synthetic documents and exits non-zero if any promise fails. It does not clear an existing `--work-dir`; delete `.smoke-ci` before re-running locally. CI runs the same four gates on Linux and Windows.
+
+The web UI has a separate browser gate for accessibility, overflow, and CSP errors. It needs Chromium and two npm packages, so it is not part of CI; see [docs/operations.md](docs/operations.md#ui-gate-optional-needs-a-browser).
 
 ## Contributing
 
