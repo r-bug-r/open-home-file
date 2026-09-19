@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Whole-library export (`homefile export-all`, `/settings/export`): one archive with metadata, pages, fields, reminders, and each distinct original, plain ZIP or passphrase-encrypted `.hfe`.
+- Import audit trail in the UI: recent attempts include failed and duplicate files with their error text, and a first-run button imports the three synthetic fixtures through the normal validated import path.
+- Document provenance and processing notes: `documents.processed_by` records a remote provider that saw page text, `documents.warnings` records per-document processing notes, and the detail page states whether the document stayed local.
+- Design token register (`docs/design/token-register.md`) with measured WCAG contrast for every light and dark text/background pair.
+- Phase B gate record (`docs/decisions/0007-phase-b-ui-gate.md`) with the measured axe, overflow, keyboard, and end-to-end flow evidence.
+- Static project landing page (`docs/index.html`) and social preview (`docs/assets/og.png`) with self-hosted fonts, light/dark themes, and no third-party requests; README now links the project page and separates user versus contributor install steps.
+
+### Changed
+
+- Web UI chrome keeps a fixed header and renders transient status below it, so long messages no longer move page content.
+- Below 48rem tables stack each row into labelled lines instead of scrolling sideways; at 320px the navigation wraps so all four destinations stay visible, and long paths and hashes wrap instead of widening the page.
+- Import shows a per-file processing queue and disables the submit button while the request is in flight.
+- The citation workspace keeps the selected field on one rail, supports arrow/Home/End keys on page tabs, scrolls the citation into view on narrow screens, and keeps working without JavaScript.
+- Confidence meters are inline SVG bars instead of `style="width:…"`, because the page CSP (`style-src 'self'`) made the browser drop the inline width and render every bar empty. Section spacing moved from inline `style` attributes to `.section-gap` utilities for the same reason; `tests/unit/test_web_pages.py` fails if any rendered page reintroduces one.
+- On narrow screens the citation jump subtracts the measured sticky-header height, so the heading is not hidden under the two-row mobile header.
+- Control borders use accessible `--color-border-strong` values; compact controls reach 44px at the mobile breakpoint.
+- Schema version 4 adds `documents.processed_by` and `documents.warnings` with an in-place migration.
+
 ## [0.1.0] - 2026-10-20
 
 First pre-release. Single-user local install; no upgrade path from an earlier version because none exists.
