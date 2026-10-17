@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "cryptography>=42",
+  "Pillow>=10",
   "pypdf>=5",
 ]
 
@@ -33,7 +34,7 @@ Issues = "https://github.com/r-bug-r/open-home-file/issues"
 Changelog = "https://github.com/r-bug-r/open-home-file/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
-ocr = ["pytesseract>=0.3.10", "Pillow>=10"]
+ocr = ["pytesseract>=0.3.10"]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 
 [project.scripts]
