@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homefile"
+version = "0.1.0"
+description = "Local-first household document index with field citations and deadline reminders"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Open Home File contributors" }]
+dependencies = [
+  "cryptography>=42",
+  "pypdf>=5",
+]
+
+[project.optional-dependencies]
+ocr = ["pytesseract>=0.3.10", "Pillow>=10"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+
+[project.scripts]
+homefile = "homefile.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["E501"]
+allowed-confusables = ["–"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "S108"]
+"scripts/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["pytesseract", "PIL.*", "pypdf.*"]
+ignore_missing_imports = true
