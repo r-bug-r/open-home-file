@@ -1,0 +1,87 @@
+/* Design tokens: the only place colours, spacing, and motion are defined.
+   Every text/background pair below is recorded with its measured contrast in
+   docs/design/token-register.md. Components must not invent values. */
+
+:root {
+  color-scheme: light dark;
+
+  --color-canvas: #f5f3ee;
+  --color-surface: #fffdf8;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #efece4;
+  --color-ink: #20221f;
+  --color-ink-muted: #5f645c;
+  --color-border: #d6d2c8;
+  --color-border-strong: #9a9d94;
+  --color-accent: #b6422b;
+  --color-accent-ink: #fffaf2;
+  --color-success: #2f6045;
+  --color-success-surface: #e7efe6;
+  --color-warning: #7d5713;
+  --color-warning-surface: #f7eed8;
+  --color-danger: #9a2a2a;
+  --color-danger-surface: #f8e5e2;
+  --color-focus: #1f5f9e;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+
+  --radius-control: 0.25rem;
+  --radius-panel: 0.5rem;
+
+  --font-body: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --motion-fast: 120ms;
+  --motion-standard: 200ms;
+
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+  --shadow-panel: 0 1px 0 var(--color-border);
+  --header-height: 3.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #17181a;
+    --color-surface: #1e2022;
+    --color-surface-raised: #24262a;
+    --color-surface-sunken: #131416;
+    --color-ink: #ecebe6;
+    --color-ink-muted: #a8aca4;
+    --color-border: #34373b;
+    --color-border-strong: #5c6166;
+    --color-accent: #e2795c;
+    --color-accent-ink: #1a1210;
+    --color-success: #8fc3a5;
+    --color-success-surface: #1f2c25;
+    --color-warning: #e0b168;
+    --color-warning-surface: #2c2519;
+    --color-danger: #e79289;
+    --color-danger-surface: #2e1d1b;
+    --color-focus: #7fb2e8;
+    --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-focus);
+    --shadow-panel: 0 1px 0 var(--color-border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-standard: 0ms;
+  }
+}
