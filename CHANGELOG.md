@@ -26,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Control borders use accessible `--color-border-strong` values; compact controls reach 44px at the mobile breakpoint.
 - Schema version 4 adds `documents.processed_by` and `documents.warnings` with an in-place migration.
 
+### Fixed
+
+- Pillow is installed with the base package so PNG and JPEG import works without the OCR extra; the `ocr` extra now contains only the Tesseract binding.
+
 ## [0.1.0] - 2026-10-20
 
 First pre-release. Single-user local install; no upgrade path from an earlier version because none exists.
