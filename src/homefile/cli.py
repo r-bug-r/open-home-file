@@ -269,6 +269,20 @@ def cmd_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_all(args: argparse.Namespace) -> int:
+    library = _library(args)
+    target = library.export_library(passphrase=args.passphrase)
+    payload = {"path": str(target), "encrypted": target.suffix == ".hfe"}
+    if args.human:
+        _emit(
+            payload,
+            f"Exported library to {target} ({'encrypted' if payload['encrypted'] else 'plain zip'})",
+        )
+    else:
+        _emit(payload)
+    return 0
+
+
 def cmd_delete(args: argparse.Namespace) -> int:
     library = _library(args)
     report = library.delete_document(args.doc_id, actor=args.actor)
@@ -417,6 +431,12 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--passphrase", help="encrypt the export with this passphrase")
     export_parser.set_defaults(func=cmd_export)
 
+    export_all_parser = subparsers.add_parser(
+        "export-all", help="export every document, field, and reminder as one archive"
+    )
+    export_all_parser.add_argument("--passphrase", help="encrypt the export with this passphrase")
+    export_all_parser.set_defaults(func=cmd_export_all)
+
     delete_parser = subparsers.add_parser("delete", help="delete a document and verify removal")
     delete_parser.add_argument("doc_id")
     delete_parser.add_argument("--actor", default="local-user")
@@ -450,14 +470,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
+
 def cmd_samples(args: argparse.Namespace) -> int:
     from .fixtures import write_samples
 
     written = write_samples(Path(args.directory))
-    _emit(
-        {name: {"path": str(path), "bytes": path.stat().st_size} for name, path in written.items()},
-        human="\n".join(f"{name}: {path} ({path.stat().st_size} bytes)" for name, path in written.items()),
-    )
+    payload = {
+        name: {"path": str(path), "bytes": path.stat().st_size} for name, path in written.items()
+    }
+    if args.human:
+        _emit(
+            payload,
+            "\n".join(
+                f"{name}: {entry['path']} ({entry['bytes']} bytes)"
+                for name, entry in payload.items()
+            ),
+        )
+    else:
+        _emit(payload)
     return 0
 
 

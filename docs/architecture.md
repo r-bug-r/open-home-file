@@ -143,7 +143,7 @@ leaves an orphan `.hbf`, which `verify_integrity` reports.
 | `src/homefile/config.py` | `Settings` dataclass, environment parsing, data-dir resolution and derived paths |
 | `src/homefile/errors.py` | Exception taxonomy used for user-visible failures |
 | `src/homefile/models.py` | Dataclasses and enums: `Document`, `Page`, `Citation`, `ExtractedField`, `Reminder`, `DeletionReport` |
-| `src/homefile/db.py` | Schema, FTS triggers, connection pragmas, transaction helpers, migrations to version 3 |
+| `src/homefile/db.py` | Schema, FTS triggers, connection pragmas, transaction helpers, migrations to version 4 |
 | `src/homefile/crypto.py` | `HBF1` at-rest sealing, `HFE1` passphrase export sealing, key generation and loading |
 | `src/homefile/store.py` | Content-addressed encrypted blob store |
 | `src/homefile/inspect.py` | Pre-parse validation, media detection, safe filenames |
@@ -165,11 +165,15 @@ leaves an orphan `.hbf`, which `verify_integrity` reports.
 The schema in `db.SCHEMA` is authoritative. All tables are `STRICT`.
 
 - `schema_meta(key TEXT PK, value TEXT NOT NULL)` - schema version; `init_db`
-  migrates version 1 by adding `reminders.confirmed_by` and `deletion_log.actor`.
+  migrates version 1 by adding `reminders.confirmed_by` and `deletion_log.actor`,
+  and version 4 by adding `documents.processed_by` and `documents.warnings`.
 - `documents(id TEXT PK, sha256 TEXT, filename TEXT, media_type TEXT, size_bytes
   INTEGER, page_count INTEGER, doc_type TEXT, doc_type_confidence REAL,
-  imported_at TEXT, title TEXT)` - one row per imported file. `sha256` is not
-  unique; duplicate detection is a service query.
+  imported_at TEXT, title TEXT, processed_by TEXT, warnings TEXT)` - one row per
+  imported file. `sha256` is not unique; duplicate detection is a service query.
+  `processed_by` names the remote provider that saw the page text and is empty
+  for local processing; `warnings` is a JSON array of processing notes shown on
+  the detail page and included in exports.
 - `pages(id INTEGER PK, doc_id TEXT FK ON DELETE CASCADE, page_no INTEGER, text
   TEXT, text_source TEXT, width REAL, height REAL, UNIQUE(doc_id, page_no))` -
   extracted text, plaintext.
@@ -273,8 +277,9 @@ parameters), `/reminders`, `/settings` (`settings_page`, which also runs
 `/healthz` (literal `{"ok":true}`), and `/static/<name>` (allowlist of
 `tokens.css`, `app.css`, `app.js`).
 
-POST: `/import` (up to 20 files), `/settings/delete-all` and
-`/documents/<id>/delete` (both require typing `DELETE`),
+POST: `/import` (up to 20 files), `/samples` (import the three synthetic
+fixtures), `/settings/export` (whole-library archive), `/settings/delete-all`
+and `/documents/<id>/delete` (both require typing `DELETE`),
 `/documents/<id>/correct` (requires a reason), `/confirm`, `/reject`,
 `/export`, and `/documents/<id>/reminders/<rid>/confirm`, `/dismiss`, `/done`,
 `/snooze` (1-365 days). Every POST requires the CSRF token in the form and in
@@ -291,6 +296,46 @@ document, the database, a query parameter, or an exception;
 `render.highlight` escapes text before wrapping the cited span in `<mark>`. The
 CSP forbids inline script and style, and `app.js` is progressive enhancement
 only. `serve` refuses any host other than `127.0.0.1`, `localhost`, or `::1`.
+
+### 9.1 UI structure and states
+
+- `render.layout` owns the fixed chrome: a sticky header with the brand,
+  primary navigation, and local/cloud mode chip. Transient flash and error
+  messages render into an absolutely positioned `.status-region` below the
+  header, so a long message never shifts page content.
+- The home page orders import first, then upcoming deadlines and recent
+  documents. Import attempts are read from `imports`, so failed and duplicate
+  files remain visible with their error text. An empty library offers the
+  synthetic sample import.
+- The detail page is the citation workspace: source pages, extracted fields,
+  and the citation/correction rail. Field rows are real links (`?field=<id>`)
+  and the server renders the selected citation, so the page works without
+  JavaScript. `app.js` upgrades the rows to in-place selection, moves the page
+  tab, highlights the character range, retargets the shared correction form,
+  and on narrow screens scrolls the citation rail into view, offsetting the
+  measured height of the sticky header so the heading is not hidden under it.
+- The confidence meter is an inline `<svg>` whose fill is a `width`
+  presentation attribute. The CSP sets `style-src 'self'`, so an inline
+  `style="width:90%"` would be dropped by the browser and the bar would render
+  empty; the same rule bans inline style attributes anywhere in a page.
+- Page tabs use the tablist pattern with arrow/Home/End keys and roving
+  `tabindex`. Selecting a field activates the tab that contains its citation.
+- Processing notes are a collapsed `<details>` block. Provenance is a badge:
+  "Processed locally" or "Sent to <provider>", derived from
+  `documents.processed_by`.
+- Responsive rules collapse the three-column workspace to two columns at
+  64rem and one column at 48rem; controls reach 44px at 48rem; `body` uses
+  `overflow-x: clip` as a backstop. Design tokens and measured contrast ratios
+  are in `docs/design/token-register.md`.
+- Below 48rem every table row stacks into labelled lines: `render.table`
+  writes each column name into `data-label` and the stylesheet shows it from
+  `td::before`. A six-column reminders table cannot fit 390px, and an
+  inner horizontal scroller would hide columns with no visible affordance;
+  stacked rows keep every value on screen without horizontal scrolling. The
+  explicit `role="table"`, `row`, `cell`, and `columnheader` attributes keep
+  the table semantics that `display: block` would otherwise drop. Above 48rem
+  `.table-wrap` still scrolls if a row exceeds the panel, and it is a
+  focusable, labelled region so the scroller is reachable by keyboard.
 
 ## 10. Provider boundary
 

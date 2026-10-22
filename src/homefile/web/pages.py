@@ -43,6 +43,8 @@ FLASH = {
     "deleted": "Document deleted and removal verified.",
     "delete-all": "Every document and derived record was deleted.",
     "exported": "Export written to your library's exports folder.",
+    "library-exported": "Library export written to your library's exports folder.",
+    "samples-imported": "Synthetic samples imported. They contain no real personal data.",
 }
 
 DELETE_CONFIRM_PHRASE = "DELETE"
@@ -68,6 +70,22 @@ def _flash(code: str | None) -> str | None:
                 sentences.append(f"{failed} {noun} could not be imported.")
             sentences.append("Review each extracted value against its citation.")
             return " ".join(sentences)
+    if code.startswith("samples-"):
+        parts = code.split("-")
+        if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+            imported, duplicates = int(parts[1]), int(parts[2])
+            sentences = []
+            if imported:
+                sentences.append(
+                    f"Imported {imported} synthetic sample document{'' if imported == 1 else 's'}."
+                )
+            if duplicates:
+                sentences.append(
+                    f"{duplicates} sample{'' if duplicates == 1 else 's'} already in the library."
+                )
+            sentences.append("They contain no real personal data.")
+            return " ".join(sentences)
+        return FLASH["samples-imported"]
     return FLASH.get(code)
 
 
@@ -103,6 +121,7 @@ def _csrf_input(token: str) -> str:
 def _field_query(field_id: str | None) -> str:
     return f"?field={quote(field_id)}" if field_id else ""
 
+
 def _usd(value: Any) -> str:
     """Format a ledger amount with two decimals and no float noise."""
     try:
@@ -111,14 +130,62 @@ def _usd(value: Any) -> str:
         return f"${esc(value)}"
     return f"${amount:.2f}"
 
+
 def _doc_label(document: Any) -> str:
     return str(document.title or document.filename)
+
+
+def _provider_note(settings: Any) -> str:
+    if _mode(settings):
+        return (
+            "Nothing leaves this computer: text extraction and classification run locally, "
+            "and the model adapter is the offline fake provider."
+        )
+    network = (
+        "network access is enabled" if settings.allow_network else "network access is disabled"
+    )
+    return (
+        f"Field suggestions may be sent to the configured {settings.provider} provider "
+        f"({network}). No other network calls are made."
+    )
+
+
+def _import_results(library: Library) -> str:
+    records = library.recent_imports(6)
+    if not records:
+        return ""
+    tones = {"imported": "ok", "duplicate": "muted", "failed": "danger"}
+    rows = []
+    for record in records:
+        if record.doc_id:
+            name = f'<a href="/documents/{esc(record.doc_id)}">{esc(record.filename)}</a>'
+        else:
+            name = esc(record.filename)
+        detail = ""
+        if record.error:
+            detail = f'<div class="hint">{esc(record.error)}</div>'
+        rows.append(
+            (
+                f"{name}{detail}",
+                badge(record.status, tones.get(record.status, "neutral")),
+                f'<time datetime="{esc(record.imported_at.isoformat())}">'
+                f"{fmt_date(record.imported_at)}</time>",
+            )
+        )
+    return (
+        '<div class="import-results">'
+        '<h3 class="import-results-title">Recent import attempts</h3>'
+        + table(("File", "Outcome", "When"), rows, "Recent import attempts")
+        + "</div>"
+    )
 
 
 # --------------------------------------------------------------------- home
 
 
-def home_page(library: Library, *, csrf: str, flash: str | None = None, error: str | None = None) -> str:
+def home_page(
+    library: Library, *, csrf: str, flash: str | None = None, error: str | None = None
+) -> str:
     settings = library.settings
     documents = library.list_documents()
     stats = library.stats()
@@ -162,8 +229,7 @@ def home_page(library: Library, *, csrf: str, flash: str | None = None, error: s
       data-dropzone data-confirm="Import these files into your local library?">
   {_csrf_input(csrf)}
   <p class="dropzone-title">Drop documents here, or choose files</p>
-  <p class="hint">PDF, PNG, or JPEG. Nothing leaves this computer: text extraction and
-  classification run locally, and the model adapter is the offline fake provider.</p>
+  <p class="hint">{esc(_provider_note(settings))}</p>
   <label class="field">
     <span class="field-label">Files</span>
     <input type="file" name="files" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple required>
@@ -178,19 +244,23 @@ def home_page(library: Library, *, csrf: str, flash: str | None = None, error: s
     <button class="button button-primary" type="submit">Import locally</button>
     <a class="button button-quiet" href="/settings">Storage and privacy</a>
   </div>
+  <div class="import-queue" data-import-queue hidden aria-live="polite"></div>
 </form>"""
 
     if upcoming:
         rows = [
-            f"""<tr>
-  <td><time datetime="{esc(item.due_date.isoformat())}">{fmt_date(item.due_date)}</time></td>
-  <td>{esc(field_label(item.kind))}</td>
-  <td><a href="/documents/{esc(item.doc_id)}?field={esc(item.field_id)}">{esc(item.note)}</a></td>
-  <td>{status_badge(str(item.status))}</td>
-</tr>"""
+            (
+                f'<time datetime="{esc(item.due_date.isoformat())}">'
+                f"{fmt_date(item.due_date)}</time>",
+                esc(field_label(item.kind)),
+                f'<a href="/documents/{esc(item.doc_id)}?field={esc(item.field_id)}">'
+                f"{esc(item.note)}</a>",
+            )
             for item in upcoming
         ]
-        reminder_block = table(("Due", "Kind", "Reminder", "Status"), rows, "Upcoming reminders")
+        reminder_block = table(
+            ("Due", "Kind", "Confirmed reminder"), rows, "Upcoming confirmed reminders"
+        )
     else:
         reminder_block = empty_state(
             "No confirmed reminders yet",
@@ -201,43 +271,52 @@ def home_page(library: Library, *, csrf: str, flash: str | None = None, error: s
 
     if recent:
         doc_rows = [
-            f"""<tr>
-  <td><a href="/documents/{esc(document.id)}">{esc(_doc_label(document))}</a>
-      <div class="hint">{esc(document.filename)}</div></td>
-  <td>{badge(document.doc_type, "neutral")}</td>
-  <td class="num">{document.page_count}</td>
-  <td class="num">{fmt_bytes(document.size_bytes)}</td>
-  <td><time datetime="{esc(document.imported_at.isoformat())}">{fmt_date(document.imported_at)}</time></td>
-</tr>"""
+            (
+                f'<a href="/documents/{esc(document.id)}">{esc(_doc_label(document))}</a>'
+                f'<div class="hint">{esc(document.doc_type)} · {document.page_count} page(s) · '
+                f"{fmt_bytes(document.size_bytes)} · {esc(document.filename)}</div>",
+                f'<time datetime="{esc(document.imported_at.isoformat())}">'
+                f"{fmt_date(document.imported_at)}</time>",
+            )
             for document in recent
         ]
-        doc_block = table(("Document", "Type", "Pages", "Size", "Imported"), doc_rows, "Recent documents")
+        doc_block = table(("Document", "Imported"), doc_rows, "Recent documents")
     else:
+        samples_form = f"""<form method="post" action="/samples" data-confirm="Import three synthetic sample documents?">
+  {_csrf_input(csrf)}
+  <button class="button button-primary" type="submit">Import synthetic samples</button>
+</form>"""
         doc_block = empty_state(
             "Your library is empty",
             "Import a receipt or warranty PDF to see extracted fields with page citations. "
-            "Synthetic samples are generated by `homefile samples` if you want a safe first run.",
+            "Synthetic samples are generated locally and contain no real personal data.",
+            samples_form,
         )
 
-    body = f"""{page_header(
-        "Household paperwork, kept locally",
-        "Every extracted value links back to the page it came from. Deadlines stay suggestions until you confirm them.",
-        '<a class="button" href="/documents">Search documents</a>',
-    )}
+    network_state = "network disabled" if not settings.allow_network else "network enabled"
+    import_results = _import_results(library)
+    body = f"""{
+        page_header(
+            "Household paperwork, kept locally",
+            "Every extracted value links back to the page it came from. Deadlines stay suggestions until you confirm them.",
+            '<a class="button" href="/documents">Search documents</a>',
+        )
+    }
 <div class="notice-strip">
-  <strong>Local only.</strong>
+  <strong>{"Local only." if _mode(settings) else "Local storage, configured provider."}</strong>
   <span>Storage: <span class="mono">{esc(settings.data_dir)}</span></span>
-  <span>Provider: <span class="mono">{esc(settings.provider)}</span> (no network)</span>
+  <span>Provider: <span class="mono">{esc(settings.provider)}</span> ({esc(network_state)})</span>
 </div>
 {metrics}
-<section class="panel" aria-labelledby="import-heading" style="margin-top: var(--space-6)">
+<section class="panel section-gap" aria-labelledby="import-heading">
   <div class="panel-head">
     <h2 id="import-heading">Import</h2>
     <p class="panel-note">Files are hashed, encrypted at rest, and indexed by page.</p>
   </div>
   {dropzone}
+  {import_results}
 </section>
-<div class="split" style="margin-top: var(--space-6)">
+<div class="split section-gap">
   <section class="panel" aria-labelledby="upcoming-heading">
     <div class="panel-head">
       <h2 id="upcoming-heading">Upcoming deadlines</h2>
@@ -273,7 +352,9 @@ def documents_page(
     flash: str | None = None,
     error: str | None = None,
 ) -> str:
-    has_filters = any([query.strip(), vendor, serial, doc_type, min_amount, max_amount, deadline_before])
+    has_filters = any(
+        [query.strip(), vendor, serial, doc_type, min_amount, max_amount, deadline_before]
+    )
     hits = library.search(
         query or None,
         vendor=vendor or None,
@@ -324,13 +405,15 @@ def documents_page(
 
     if hits:
         rows = [
-            f"""<tr>
-  <td><a href="/documents/{esc(hit.doc_id)}{_field_query(hit.field_id)}">{esc(hit.filename)}</a>
-      <div class="hint mono">page {hit.page}</div></td>
-  <td>{esc(hit.doc_type)}</td>
-  <td>{badge(hit.matched_field, "muted") if hit.matched_field else badge("text", "neutral")}</td>
-  <td>{esc(hit.snippet)}</td>
-</tr>"""
+            (
+                f'<a href="/documents/{esc(hit.doc_id)}{_field_query(hit.field_id)}">'
+                f'{esc(hit.filename)}</a><div class="hint mono">page {hit.page}</div>',
+                esc(hit.doc_type),
+                badge(hit.matched_field, "muted")
+                if hit.matched_field
+                else badge("text", "neutral"),
+                esc(hit.snippet),
+            )
             for hit in hits
         ]
         results = table(("Document", "Type", "Matched", "Snippet"), rows, "Search results")
@@ -349,11 +432,13 @@ def documents_page(
             '<a class="button button-primary" href="/">Import a document</a>',
         )
 
-    body = f"""{page_header(
-        "Documents",
-        f"{len(hits)} result(s). Search reads local page text and extracted fields only.",
-        '<a class="button" href="/">Import</a>',
-    )}
+    body = f"""{
+        page_header(
+            "Documents",
+            f"{len(hits)} result(s). Search reads local page text and extracted fields only.",
+            '<a class="button" href="/">Import</a>',
+        )
+    }
 <section class="panel" aria-labelledby="search-heading">
   <div class="panel-head"><h2 id="search-heading">Search</h2>
   <p class="panel-note">Press <kbd>/</kbd> to focus the text field.</p></div>
@@ -363,7 +448,9 @@ def documents_page(
   <h2 id="results-heading" class="visually-hidden">Results</h2>
   {results}
 </section>"""
-    return _shell(library, title="Documents", body=body, active="documents", flash=flash, error=error)
+    return _shell(
+        library, title="Documents", body=body, active="documents", flash=flash, error=error
+    )
 
 
 # ------------------------------------------------------------------- detail
@@ -377,9 +464,14 @@ def _page_panels(detail: DocumentDetail, selected: Any) -> str:
             inner = highlight(text, selected.citation.char_start, selected.citation.char_end)
         else:
             inner = esc(text)
-        hidden = "" if (selected is None and page.number == 1) or (
-            selected is not None and selected.citation.page == page.number
-        ) else " hidden"
+        hidden = (
+            ""
+            if (selected is None and page.number == 1)
+            or (selected is not None and selected.citation.page == page.number)
+            else " hidden"
+        )
+        tab_id = f"page-tab-{page.number}"
+        panel_id = f"page-panel-{page.number}"
         if page.source is TextSource.NONE and not text:
             inner = (
                 '<p class="hint">This page has no text layer and OCR is not installed, '
@@ -387,11 +479,13 @@ def _page_panels(detail: DocumentDetail, selected: Any) -> str:
                 "downloadable.</p>"
             )
             panels.append(
-                f'<div data-page-panel="{page.number}"{hidden}>{inner}</div>'
+                f'<div id="{panel_id}" role="tabpanel" aria-labelledby="{tab_id}"'
+                f' data-page-panel="{page.number}" tabindex="0"{hidden}>{inner}</div>'
             )
             continue
         panels.append(
-            f'<div data-page-panel="{page.number}"{hidden}>'
+            f'<div id="{panel_id}" role="tabpanel" aria-labelledby="{tab_id}"'
+            f' data-page-panel="{page.number}"{hidden}>'
             f'<pre class="source-text" tabindex="0" aria-label="Page {page.number} text">{inner}</pre>'
             f"</div>"
         )
@@ -403,7 +497,9 @@ def _page_tabs(detail: DocumentDetail, selected: Any) -> str:
     for page in detail.pages:
         active = (selected.citation.page if selected else 1) == page.number
         tabs.append(
-            f'<button type="button" class="page-tab" role="tab" data-page-tab="{page.number}"'
+            f'<button type="button" class="page-tab" role="tab" id="page-tab-{page.number}"'
+            f' data-page-tab="{page.number}" aria-controls="page-panel-{page.number}"'
+            f' tabindex="{"0" if active else "-1"}"'
             f' aria-selected="{"true" if active else "false"}">Page {page.number}'
             f' <span class="hint">{esc(page.source)}</span></button>'
         )
@@ -431,15 +527,14 @@ def _field_rows(detail: DocumentDetail, selected_id: str | None, threshold: floa
   </span>
   <span class="field-value">{esc(field.value)}</span>
   <span class="field-quote">page {field.citation.page} · chars {field.citation.char_start}–{field.citation.char_end}</span>
+  {f'<span class="field-quote">corrected {fmt_date(field.updated_at)}</span>' if field.version > 1 and field.updated_at else ""}
   {confidence_meter(field.confidence, threshold)}
 </a>"""
         )
     return "".join(rows)
 
 
-def _citation_panel(
-    detail: DocumentDetail, selected: Any, csrf: str, threshold: float
-) -> str:
+def _citation_panel(detail: DocumentDetail, selected: Any, csrf: str, threshold: float) -> str:
     document = detail.document
     if selected is None:
         return """<div class="citation-card" data-citation-pane tabindex="-1" aria-labelledby="citation-heading">
@@ -452,8 +547,7 @@ def _citation_panel(
     reminder_block = ""
     for reminder in detail.reminders:
         hidden = "" if reminder.field_id == selected.id else " hidden"
-        reminder_block += f"""<div class="panel" data-reminder-for="{esc(reminder.field_id)}"{hidden}
-     style="margin-top: var(--space-3)">
+        reminder_block += f"""<div class="panel section-gap-sm" data-reminder-for="{esc(reminder.field_id)}"{hidden}>
   <div class="panel-head">
     <strong>{esc(field_label(reminder.kind))} reminder</strong>
     {status_badge(str(reminder.status))}
@@ -463,7 +557,7 @@ def _citation_panel(
     <dt>Confidence</dt><dd>{round(reminder.confidence * 100)}%</dd>
     <dt>Created</dt><dd>{fmt_date(reminder.created_at)}</dd>
   </dl>
-  <div class="inline-actions" style="margin-top: var(--space-3)">
+  <div class="inline-actions section-gap-sm">
     {_reminder_actions(document.id, reminder, csrf)}
   </div>
 </div>"""
@@ -477,6 +571,8 @@ def _citation_panel(
     <dt>Source</dt><dd class="mono">{esc(selected.source)}</dd>
     <dt>Page</dt><dd>{selected.citation.page}</dd>
     <dt>Offsets</dt><dd class="mono">{selected.citation.char_start}–{selected.citation.char_end}</dd>
+    {f"<dt>Last corrected</dt><dd>{fmt_date(selected.updated_at)}</dd>" if selected.version > 1 and selected.updated_at else ""}
+    {f'<dt>Original</dt><dd class="mono">{esc(selected.original_value)}</dd>' if selected.version > 1 else ""}
   </dl>
   <p class="field-label">Source excerpt</p>
   <p class="citation-target" data-citation-quote>{esc(excerpt)}</p>
@@ -510,7 +606,9 @@ def _reminder_actions(doc_id: str, reminder: Reminder, csrf: str) -> str:
     base = f"/documents/{esc(doc_id)}/reminders/{esc(reminder.id)}"
     # Keep the selected field after the redirect so the citation panel does not
     # collapse when a reminder action re-renders the page.
-    context = _csrf_input(csrf) + f'<input type="hidden" name="field" value="{esc(reminder.field_id)}">'
+    context = (
+        _csrf_input(csrf) + f'<input type="hidden" name="field" value="{esc(reminder.field_id)}">'
+    )
     status = reminder.status
     parts: list[str] = []
     if status is ReminderStatus.SUGGESTED:
@@ -562,8 +660,9 @@ def document_page(
         for entry in library.history(field.id):
             history_items.append((entry.at, field, entry))
     history_items.sort(key=lambda item: item[0], reverse=True)
-    history_html = "".join(
-        f"""<li>
+    history_html = (
+        "".join(
+            f"""<li>
   <time datetime="{esc(entry.at.isoformat())}">{fmt_date(entry.at)}</time>
   <div class="timeline-body">
     <strong>{esc(field_label(str(field.name)))}</strong>
@@ -572,8 +671,10 @@ def document_page(
     <div class="hint">{esc(entry.actor)}: {esc(entry.reason)}</div>
   </div>
 </li>"""
-        for entry_at, field, entry in history_items[:40]
-    ) or '<li><div class="timeline-body hint">No changes recorded yet.</div></li>'
+            for entry_at, field, entry in history_items[:40]
+        )
+        or '<li><div class="timeline-body hint">No changes recorded yet.</div></li>'
+    )
 
     unreadable = any(page.source is TextSource.NONE for page in detail.pages)
     no_fields_hint = (
@@ -588,6 +689,26 @@ def document_page(
             "this document has no readable text, so no fields could be extracted. "
             "Install the OCR extra or re-import a text PDF.</p>"
         )
+    notes = ""
+    if document.warnings:
+        note_items = "".join(f"<li>{esc(item)}</li>" for item in document.warnings[:8])
+        more = ""
+        if len(document.warnings) > 8:
+            more = (
+                f'<p class="hint">and {len(document.warnings) - 8} more note(s) in the export.</p>'
+            )
+        notes = f"""<details class="panel processing-notes">
+  <summary>{len(document.warnings)} processing note(s)</summary>
+  <ul class="delete-list">{note_items}</ul>
+  {more}
+</details>"""
+    if document.stayed_local:
+        provenance = '<span class="badge badge-ok">Processed locally</span> no document text was sent to a provider.'
+    else:
+        provenance = (
+            f'<span class="badge badge-warn">Sent to {esc(document.processed_by)}</span> '
+            "page text was sent to this provider for field suggestions."
+        )
 
     body = f"""<nav aria-label="Breadcrumb">
   <ol class="breadcrumbs">
@@ -595,17 +716,22 @@ def document_page(
     <li aria-current="page">{esc(document.filename)}</li>
   </ol>
 </nav>
-{page_header(
-    _doc_label(document),
-    f"{document.page_count} page(s) · {fmt_bytes(document.size_bytes)} · imported {fmt_date(document.imported_at)}",
-    f'<a class="button" href="/documents/{esc(document.id)}/original">Download original</a>'
-    f'<a class="button" href="/documents/{esc(document.id)}/delete">Delete…</a>',
-)}
+{
+        page_header(
+            _doc_label(document),
+            f"{document.page_count} page(s) · {fmt_bytes(document.size_bytes)} · imported {fmt_date(document.imported_at)}",
+            f'<a class="button" href="/documents/{esc(document.id)}/original">Download original</a>'
+            f'<a class="button" href="/documents/{esc(document.id)}/delete">Delete…</a>',
+        )
+    }
 {warnings}
+{notes}
 <div class="notice-strip">
-  <span>{badge(document.doc_type, "neutral")} type confidence {round(document.doc_type_confidence * 100)}%</span>
+  <span>{badge(document.doc_type, "neutral")} type confidence {
+        round(document.doc_type_confidence * 100)
+    }%</span>
   <span class="mono">{esc(document.sha256[:16])}…</span>
-  <span>Stored locally; processing used {esc(library.settings.provider)} provider.</span>
+  <span>{provenance}</span>
 </div>
 <div class="workspace" data-workspace>
   <section class="source-pane panel" aria-labelledby="source-heading">
@@ -628,7 +754,7 @@ def document_page(
     {_citation_panel(detail, selected, csrf, threshold)}
   </section>
 </div>
-<section class="panel" aria-labelledby="history-heading" style="margin-top: var(--space-6)">
+<section class="panel section-gap" aria-labelledby="history-heading">
   <div class="panel-head">
     <h2 id="history-heading">Correction history</h2>
     <p class="panel-note">Every extracted value keeps its original text.</p>
@@ -647,7 +773,9 @@ def document_page(
     <button class="button" type="submit">Export record</button>
   </form>
 </section>"""
-    return _shell(library, title=document.filename, body=body, active="documents", flash=flash, error=error)
+    return _shell(
+        library, title=document.filename, body=body, active="documents", flash=flash, error=error
+    )
 
 
 def delete_page(
@@ -673,7 +801,8 @@ def delete_page(
     <li>{len(detail.reminders)} reminder(s)</li>
     <li>Import records and any export file created from this document</li>
   </ul>
-  <p class="hint">There is no cloud copy: this is the only copy in the library.</p>
+  <p class="hint">There is no cloud copy: this is the only copy in the library. Backups or
+  filesystem snapshots made outside this library are not touched.</p>
   <form method="post" action="/documents/{esc(document.id)}/delete" class="stack"
         data-confirm="Delete this document and every derived record?">
     {_csrf_input(csrf)}
@@ -687,7 +816,9 @@ def delete_page(
     </div>
   </form>
 </div>"""
-    return _shell(library, title="Delete document", body=body, active="documents", flash=flash, error=error)
+    return _shell(
+        library, title="Delete document", body=body, active="documents", flash=flash, error=error
+    )
 
 
 # ----------------------------------------------------------------- reminders
@@ -711,32 +842,41 @@ def reminders_page(
         "dismissed": "Dismissed",
         "done": "Completed",
     }
+    tab_labels = (
+        ("", "All"),
+        ("suggested", "Suggested"),
+        ("confirmed", "Confirmed"),
+        ("dismissed", "Dismissed"),
+        ("done", "Done"),
+    )
+
+    def current(key: str) -> str:
+        return ' aria-current="page"' if key == chosen else ""
+
     tabs = "".join(
-        f'<a class="page-tab" role="tab" aria-selected="{"true" if key == chosen else "false"}"'
+        f'<a class="page-tab"{current(key)}'
         f' href="/reminders{"" if not key else "?status=" + key}">{esc(label)}</a>'
-        for key, label in (
-            ("", "All"),
-            ("suggested", "Suggested"),
-            ("confirmed", "Confirmed"),
-            ("dismissed", "Dismissed"),
-            ("done", "Done"),
-        )
+        for key, label in tab_labels
     )
     if reminders:
         rows = []
         for item in reminders:
             rows.append(
-                f"""<tr>
-  <td><time datetime="{esc(item.due_date.isoformat())}">{fmt_date(item.due_date)}</time></td>
-  <td>{esc(field_label(item.kind))}</td>
-  <td>{status_badge(str(item.status))}</td>
-  <td>{round(item.confidence * 100)}%</td>
-  <td><a href="/documents/{esc(item.doc_id)}?field={esc(item.field_id)}">Open citation</a>
-      <div class="hint">{esc(item.note)}</div></td>
-  <td><div class="inline-actions">{_reminder_actions(item.doc_id, item, csrf)}</div></td>
-</tr>"""
+                (
+                    f'<time datetime="{esc(item.due_date.isoformat())}">'
+                    f"{fmt_date(item.due_date)}</time>",
+                    esc(field_label(item.kind)),
+                    status_badge(str(item.status)),
+                    f"{round(item.confidence * 100)}%",
+                    f'<a href="/documents/{esc(item.doc_id)}?field={esc(item.field_id)}">'
+                    f"{esc(item.doc_label or item.note)}</a>"
+                    f'<div class="hint">{esc(item.note)}</div>',
+                    f'<div class="inline-actions">{_reminder_actions(item.doc_id, item, csrf)}</div>',
+                )
             )
-        listing = table(("Due", "Kind", "Status", "Confidence", "Source", "Actions"), rows, titles[chosen])
+        listing = table(
+            ("Due", "Kind", "Status", "Confidence", "Source", "Actions"), rows, titles[chosen]
+        )
     else:
         listing = empty_state(
             "No reminders in this view",
@@ -745,16 +885,20 @@ def reminders_page(
             '<a class="button" href="/documents">Find a document</a>',
         )
 
-    body = f"""{page_header(
-        "Reminders",
-        "Suggestions never fire on their own. Confirm one to make it active; every reminder keeps its source citation.",
-    )}
-<div class="page-tabs" role="tablist" aria-label="Reminder status">{tabs}</div>
+    body = f"""{
+        page_header(
+            "Reminders",
+            "Suggestions never fire on their own. Confirm one to make it active; every reminder keeps its source citation.",
+        )
+    }
+<nav class="page-tabs" aria-label="Reminder status">{tabs}</nav>
 <section class="panel" aria-labelledby="reminders-heading" aria-live="polite">
   <h2 id="reminders-heading" class="visually-hidden">{esc(titles[chosen])}</h2>
   {listing}
 </section>"""
-    return _shell(library, title="Reminders", body=body, active="reminders", flash=flash, error=error)
+    return _shell(
+        library, title="Reminders", body=body, active="reminders", flash=flash, error=error
+    )
 
 
 # ------------------------------------------------------------------ settings
@@ -769,21 +913,21 @@ def settings_page(
     provider = library.provider()
     provider_name = provider.name if provider else "unavailable"
     mode_label = "Local only" if _mode(settings) else "Cloud provider enabled"
-    integrity = (
-        badge("verified", "ok")
-        if report.verified
-        else badge("problems found", "danger")
-    )
+    integrity = badge("verified", "ok") if report.verified else badge("problems found", "danger")
     problems = ""
     if report.problems:
-        problems = '<ul class="delete-list">' + "".join(
-            f"<li>{esc(problem)}</li>" for problem in report.problems
-        ) + "</ul>"
+        problems = (
+            '<ul class="delete-list">'
+            + "".join(f"<li>{esc(problem)}</li>" for problem in report.problems)
+            + "</ul>"
+        )
 
-    body = f"""{page_header(
-        "Settings",
-        "What this install stores, where it stores it, and what leaves the machine.",
-    )}
+    body = f"""{
+        page_header(
+            "Settings",
+            "What this install stores, where it stores it, and what leaves the machine.",
+        )
+    }
 <section class="panel" aria-labelledby="storage-heading">
   <div class="panel-head"><h2 id="storage-heading">Storage</h2>{integrity}</div>
   <dl class="meta">
@@ -791,7 +935,9 @@ def settings_page(
     <dt>Database</dt><dd class="mono">{esc(settings.db_path)}</dd>
     <dt>Encrypted blobs</dt><dd class="mono">{esc(settings.blob_dir)}</dd>
     <dt>Exports</dt><dd class="mono">{esc(settings.export_dir)}</dd>
-    <dt>Documents</dt><dd>{stats["documents"]} · {stats["pages"]} pages · {stats["fields"]} fields</dd>
+    <dt>Documents</dt><dd>{stats["documents"]} · {stats["pages"]} pages · {
+        stats["fields"]
+    } fields</dd>
     <dt>Deletions verified</dt><dd>{stats["deletion_log"]}</dd>
   </dl>
   {problems}
@@ -801,7 +947,7 @@ def settings_page(
   {badge(mode_label, "ok" if _mode(settings) else "danger")}</div>
   <dl class="meta">
     <dt>Provider</dt><dd class="mono">{esc(settings.provider)} → {esc(provider_name)}</dd>
-    <dt>Network access</dt><dd>{'disabled' if not settings.allow_network else 'enabled'}</dd>
+    <dt>Network access</dt><dd>{"disabled" if not settings.allow_network else "enabled"}</dd>
     <dt>Per-run request cap</dt><dd>{settings.run_request_cap}</dd>
     <dt>Per-run token cap</dt><dd>{settings.run_token_cap}</dd>
     <dt>Per-run cost cap</dt><dd class="mono">{_usd(settings.run_cost_cap_usd)}</dd>
@@ -814,7 +960,9 @@ def settings_page(
 <section class="panel" aria-labelledby="retention-heading">
   <div class="panel-head"><h2 id="retention-heading">Retained data</h2></div>
   <ul class="delete-list">
-    <li>Encrypted original files (AES-256-GCM, key at <span class="mono">{esc(settings.key_path)}</span>)</li>
+    <li>Encrypted original files (AES-256-GCM, key at <span class="mono">{
+        esc(settings.key_path)
+    }</span>)</li>
     <li>Extracted page text and a local full-text index (plaintext, local database only)</li>
     <li>Extracted fields, citations, confidence, correction history, reminders</li>
     <li>Provider ledger rows: provider, model, tokens, estimated cost, outcome</li>
@@ -823,10 +971,27 @@ def settings_page(
   <p class="hint">No telemetry, no analytics, no upload. Deleting a document removes all of the
   above for that document and verifies removal.</p>
 </section>
+<section class="panel" aria-labelledby="export-heading">
+  <div class="panel-head"><h2 id="export-heading">Export everything</h2>
+  <p class="panel-note">A portable archive of every document, field, reminder, and original file.</p></div>
+  <form method="post" action="/settings/export" class="form-row"
+        data-confirm="Write a full library export to the exports folder?">
+    {_csrf_input(csrf)}
+    <label class="field">
+      <span class="field-label">Passphrase (optional, 8+ characters)</span>
+      <input type="password" name="passphrase" minlength="8" autocomplete="new-password">
+    </label>
+    <button class="button" type="submit">Export library</button>
+  </form>
+  <p class="hint">Archives are written to <span class="mono">{esc(settings.export_dir)}</span>.
+  Without a passphrase the archive is plaintext; with one it is encrypted as a single file.</p>
+</section>
 <div class="danger-zone">
   <h2>Delete everything</h2>
   <p>Deletes every document, page, field, reminder, export, and encrypted blob in this library.
   Provider ledger and deletion-log rows are kept as an audit trail of what happened.</p>
+  <p class="hint">Backups and filesystem snapshots made outside this library are not touched
+  by any delete action here.</p>
   <form method="post" action="/settings/delete-all" class="stack"
         data-confirm="Delete every document and derived record in this library?">
     {_csrf_input(csrf)}

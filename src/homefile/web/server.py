@@ -52,9 +52,7 @@ def parse_multipart(body: bytes, content_type: str) -> tuple[dict[str, str], lis
     """Parse a multipart/form-data body into text fields and file uploads."""
     if "boundary=" not in content_type:
         raise MultipartError("missing multipart boundary")
-    raw = (
-        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("latin-1") + body
-    )
+    raw = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("latin-1") + body
     message = BytesParser(policy=policy.default).parsebytes(raw)
     if not message.is_multipart():
         raise MultipartError("body is not multipart")
@@ -153,7 +151,9 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _error(self, status: int, title: str, message: str) -> None:
-        self._html(status, pages.error_page(self._library(), title=title, message=message, status=status))
+        self._html(
+            status, pages.error_page(self._library(), title=title, message=message, status=status)
+        )
 
     def _read_form(self) -> tuple[dict[str, str], list[Upload]]:
         length = int(self.headers.get("Content-Length") or 0)
@@ -280,7 +280,11 @@ class Handler(BaseHTTPRequestHandler):
             self._html(
                 HTTPStatus.OK,
                 pages.reminders_page(
-                    library, csrf=csrf, status=param("status"), flash=param("flash"), error=param("error")
+                    library,
+                    csrf=csrf,
+                    status=param("status"),
+                    flash=param("flash"),
+                    error=param("error"),
                 ),
             )
             return
@@ -346,6 +350,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/import":
             self._handle_import(uploads)
             return
+        if path == "/samples":
+            outcomes = library.import_samples()
+            imported = sum(1 for outcome in outcomes if not outcome.duplicate)
+            duplicates = len(outcomes) - imported
+            self._redirect("/", flash=f"samples-{imported}-{duplicates}")
+            return
+        if path == "/settings/export":
+            library.export_library(passphrase=fields.get("passphrase") or None)
+            self._redirect("/settings", flash="library-exported")
+            return
         if path == "/settings/delete-all":
             if fields.get("confirm", "") != pages.DELETE_CONFIRM_PHRASE:
                 raise ValidationError("confirmation phrase did not match")
@@ -367,11 +381,15 @@ class Handler(BaseHTTPRequestHandler):
             if action == "confirm":
                 field_id = fields.get("field_id", "")
                 library.confirm_field(field_id)
-                self._redirect(f"/documents/{doc_id}?field={quote(field_id)}", flash="field-confirmed")
+                self._redirect(
+                    f"/documents/{doc_id}?field={quote(field_id)}", flash="field-confirmed"
+                )
                 return
             if action == "reject":
                 field_id = fields.get("field_id", "")
-                library.reject_field(field_id, reason=fields.get("reason", "") or "rejected by user")
+                library.reject_field(
+                    field_id, reason=fields.get("reason", "") or "rejected by user"
+                )
                 self._redirect(f"/documents/{doc_id}", flash="field-rejected")
                 return
             if action == "export":
@@ -456,7 +474,9 @@ class Handler(BaseHTTPRequestHandler):
         self._send(
             HTTPStatus.OK,
             target.read_bytes(),
-            f"{media_type}; charset=utf-8" if media_type.startswith(("text/", "application/javascript")) else media_type,
+            f"{media_type}; charset=utf-8"
+            if media_type.startswith(("text/", "application/javascript"))
+            else media_type,
             headers={"Cache-Control": "no-cache"},
         )
 

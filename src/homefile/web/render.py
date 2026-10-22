@@ -7,7 +7,7 @@ a document or the database passes through :func:`esc`.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from html import escape
 from typing import Any
@@ -45,10 +45,11 @@ def nav(active: str) -> str:
         ("reminders", "/reminders", "Reminders"),
         ("settings", "/settings", "Settings"),
     ]
+
     def link(key: str, href: str, label: str) -> str:
         current = key == active
         classes = "nav-link is-active" if current else "nav-link"
-        marker = "" if not current else ' aria-current="page"' 
+        marker = "" if not current else ' aria-current="page"'
         return f'<li><a class="{classes}"{marker} href="{href}">{esc(label)}</a></li>'
 
     links = "".join(link(key, href, label) for key, href, label in items)
@@ -91,9 +92,9 @@ def layout(
   <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">▤</span> {esc(APP_NAME)}</a>
   <nav aria-label="Primary">{nav(active)}</nav>
   <div class="header-status">{mode}</div>
+  <div class="status-region">{banner}</div>
 </header>
 <main id="main" class="app-main">
-{banner}
 {body}
 </main>
 <footer class="app-footer">
@@ -142,14 +143,34 @@ def empty_state(title: str, detail: str, action: str = "") -> str:
 </div>"""
 
 
-def table(headers: Iterable[str], rows: Iterable[str], caption: str) -> str:
-    head = "".join(f'<th scope="col">{esc(item)}</th>' for item in headers)
-    body = "".join(rows)
-    return f"""<div class="table-wrap">
-<table>
+def table(headers: Iterable[str], rows: Iterable[Sequence[str]], caption: str) -> str:
+    """Render a data table.
+
+    ``rows`` holds one sequence of already-escaped cell fragments per row. Each
+    cell carries its column name in ``data-label``, which the narrow-screen
+    stylesheet uses to stack a row into labelled lines instead of clipping
+    columns. Explicit roles keep the table semantics when that CSS changes the
+    display type.
+    """
+    heads = list(headers)
+    head = "".join(f'<th scope="col" role="columnheader">{esc(item)}</th>' for item in heads)
+    body = "".join(
+        '<tr role="row">'
+        + "".join(
+            f'<td role="cell" data-label="{esc(name)}">{cell}'
+            for name, cell in zip(heads, row, strict=True)
+        )
+        + "</tr>"
+        for row in rows
+    )
+    # The wrapper scrolls horizontally on narrow screens. A scroll container
+    # with no focusable descendant is unreachable by keyboard, so it is itself
+    # a labelled, focusable region.
+    return f"""<div class="table-wrap" role="region" aria-label="{esc(caption)}" tabindex="0">
+<table role="table">
   <caption class="visually-hidden">{esc(caption)}</caption>
-  <thead><tr>{head}</tr></thead>
-  <tbody>{body}</tbody>
+  <thead role="rowgroup"><tr role="row">{head}</tr></thead>
+  <tbody role="rowgroup">{body}</tbody>
 </table>
 </div>"""
 
@@ -161,15 +182,16 @@ def field_label(name: str) -> str:
 def confidence_meter(confidence: float, threshold: float) -> str:
     percent = max(0, min(100, round(confidence * 100)))
     tone = "ok" if confidence >= threshold else "warn"
-    hint = (
-        "needs review"
-        if confidence < threshold
-        else "above confirmation threshold"
-    )
+    hint = "needs review" if confidence < threshold else "above confirmation threshold"
+    # The bar is an SVG so the fill width is a presentation attribute. An
+    # inline style attribute would be blocked by the page's style-src CSP.
     return (
         f'<span class="confidence confidence-{tone}">'
-        f'<span class="confidence-track" aria-hidden="true">'
-        f'<span class="confidence-fill" style="width:{percent}%"></span></span>'
+        f'<svg class="confidence-track" viewBox="0 0 100 6" preserveAspectRatio="none" '
+        f'aria-hidden="true" focusable="false">'
+        f'<rect class="confidence-rail" x="0" y="0" width="100" height="6" rx="3"></rect>'
+        f'<rect class="confidence-fill" x="0" y="0" width="{percent}" height="6" rx="3"></rect>'
+        f"</svg>"
         f'<span class="confidence-text">{percent}% · {esc(hint)}</span></span>'
     )
 

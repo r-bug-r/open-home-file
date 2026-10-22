@@ -59,6 +59,7 @@ homefile history <field-id>
 homefile reminders
 homefile confirm-reminder <reminder-id>
 homefile due
+homefile export-all --passphrase "a long backup passphrase"
 homefile serve
 ```
 
@@ -79,8 +80,23 @@ homefile serve --port 8792
   without adding both.
 - `/healthz` returns `{"ok":true}` for a local supervisor.
 - Stop with Ctrl+C. There is no daemon mode and no service file.
-- `/settings` runs `verify_integrity` and exposes the delete-everything action,
-  which requires typing `DELETE`.
+- The home page imports files (drop zone or picker, up to 20 at once) and lists
+  recent import attempts, including failed and duplicate files with their
+  error text. An empty library offers three synthetic samples, generated
+  locally through the normal import path.
+- `/documents` searches page text and structured fields. `/documents/<id>`
+  shows the source pages, extracted fields, the selected citation with its
+  character range, the correction form, and processing notes. Every field row
+  is a link, so the workflow works without JavaScript; `app.js` adds in-place
+  selection, page-tab keyboard navigation, and a per-file import queue.
+- `/reminders` filters by status and keeps the source document beside every
+  reminder. A suggested reminder never becomes active without confirmation.
+- `/settings` runs `verify_integrity`, shows storage paths, processing mode,
+  retained data classes, per-run and daily caps, and the export and
+  delete-everything actions. Delete-all requires typing `DELETE`.
+- `/settings/export` writes a whole-library archive to `exports/`; it is a
+  plain ZIP unless a passphrase is supplied, in which case it is a single
+  `.hfe` file.
 
 ## 6. Configuration
 
@@ -132,9 +148,14 @@ tar czf homefile-backup.tgz -C <parent> <data-dir>
 ```
 
 Restore by extracting the archive and pointing `--data-dir` or
-`HOMEFILE_DATA_DIR` at it. Because there has been no released schema change,
-there is no migration path beyond the in-code `init_db` step, which upgrades a
-version-1 database to version 3 on open.
+`HOMEFILE_DATA_DIR` at it. `init_db` migrates an older database to schema
+version 4 on open (version 1 gains reminder/deletion actor columns, and
+version 4 gains document provenance and warning columns).
+
+For a portable copy that does not need `key.bin`, use
+`homefile export-all --passphrase <passphrase>`. It writes one `.hfe` archive
+under `exports/` containing metadata and every distinct original; without a
+passphrase the archive is a plaintext `.zip`.
 
 If `key.bin` is lost, blobs cannot be decrypted; `homefile verify` reports
 every one as a mismatch. Extracted text and fields survive because they are in
@@ -192,3 +213,23 @@ python -m homefile smoke --work-dir .smoke-ci
 deletion workflow on synthetic documents in a temporary directory and exits
 non-zero if any promise fails. It does not clear an existing `--work-dir`;
 delete `.smoke-ci` before re-running locally.
+
+### UI gate (optional, needs a browser)
+
+`scripts/ui-check.mjs` drives the real pages in Chromium and fails on an
+axe-core violation at serious or critical impact, horizontal page overflow, or
+a CSP console error. It also writes screenshots to `.ui-tmp/shots`.
+
+It is not part of `pytest` or CI: it needs a Chromium binary and two npm
+packages, which the local-only, `$0` constraint keeps out of the repository.
+Install them once next to the checkout, then run it from the repository root:
+
+```bash
+mkdir -p ../.ui-tools && cd ../.ui-tools && npm install playwright-core axe-core
+cd - && UI_TOOLS=../.ui-tools node scripts/ui-check.mjs
+```
+
+It covers five pages at 320, 390, 768, 1024, and 1440 px. Re-run it after any
+change to `app.css`, `render.py`, or a page template. The script also reports
+the widest overflowing elements, which is faster than guessing from the
+screenshot.

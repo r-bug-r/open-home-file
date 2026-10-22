@@ -149,6 +149,13 @@ class Document:
     imported_at: datetime
     title: str = ""
     deleted_at: datetime | None = None
+    processed_by: str = ""
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def stayed_local(self) -> bool:
+        """True when no model provider saw this document's text."""
+        return not self.processed_by
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -162,6 +169,8 @@ class Document:
             "doc_type_confidence": self.doc_type_confidence,
             "imported_at": self.imported_at.isoformat(),
             "title": self.title,
+            "processed_by": self.processed_by,
+            "warnings": list(self.warnings),
         }
 
 
@@ -179,6 +188,7 @@ class Reminder:
     created_at: datetime | None = None
     confirmed_at: datetime | None = None
     confirmed_by: str | None = None
+    doc_label: str = ""
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -189,6 +199,7 @@ class Reminder:
             "due_date": self.due_date.isoformat(),
             "status": str(self.status),
             "confidence": self.confidence,
+            "doc_label": self.doc_label,
             "citation": self.citation.to_json(),
             "note": self.note,
             "confirmed_at": self.confirmed_at.isoformat() if self.confirmed_at else None,

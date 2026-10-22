@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Home File — household paperwork, kept locally</title>
+  <meta name="description" content="A local-first index for receipts, warranties, bills, and contracts. Every extracted value cites the exact page and character range it came from. Nothing leaves your computer by default.">
+  <meta name="theme-color" content="#f3efe5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#17191a" media="(prefers-color-scheme: dark)">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'">
+  <link rel="canonical" href="https://r-bug-r.github.io/open-home-file/">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/landing.css">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Open Home File">
+  <meta property="og:title" content="Open Home File — the paper trail, finally legible">
+  <meta property="og:description" content="Local-first household paperwork with a citation for every extracted value.">
+  <meta property="og:url" content="https://r-bug-r.github.io/open-home-file/">
+  <meta property="og:image" content="https://r-bug-r.github.io/open-home-file/assets/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Open Home File — the paper trail, finally legible.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Open Home File — the paper trail, finally legible">
+  <meta name="twitter:description" content="Local-first household paperwork with a citation for every extracted value.">
+  <meta name="twitter:image" content="https://r-bug-r.github.io/open-home-file/assets/og.png">
+  <meta name="twitter:image:alt" content="Open Home File — the paper trail, finally legible.">
+  <script src="assets/landing.js" defer></script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#top" aria-label="Open Home File, back to top">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M6.5 4.5h14.2l5.3 5.3v17.7h-19.5z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M20.5 4.5v5.5h5.5M11 15h11M11 19h11M11 23h7" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M11 10.5h4" stroke="var(--rust)" stroke-width="1.5"/>
+        </svg>
+        <span>Open Home File</span>
+      </a>
+
+      <nav class="site-nav" aria-label="Primary">
+        <a href="#why">Why local</a>
+        <a href="#how">How it works</a>
+        <a href="#under-the-hood">Under the hood</a>
+      </nav>
+
+      <div class="header-actions">
+        <a class="github-link" href="https://github.com/r-bug-r/open-home-file">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2.4a9.6 9.6 0 0 0-3 18.7c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.8.8.1-.6.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.4 4.6-4.6 4.9.4.3.7.9.7 1.8v2.7c0 .3.2.6.7.5a9.6 9.6 0 0 0-3-18.7z" fill="currentColor"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <a class="button button-small" href="#install">Get started</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero shell" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span>Local-first household paperwork</p>
+        <h1 id="hero-title">The paper trail,<br><span class="hero-second">finally <em>legible.</em></span></h1>
+        <p class="hero-lede">Open Home File indexes the receipts, warranties, bills, and contracts that run a household. Every value links back to the exact page it came from. Nothing leaves your computer by default.</p>
+        <div class="hero-actions">
+          <a class="button" href="#install">Get Open Home File</a>
+          <a class="text-link" href="#how">See how it works <span aria-hidden="true">→</span></a>
+        </div>
+        <ul class="hero-facts" aria-label="Product principles">
+          <li>No account</li>
+          <li>No cloud by default</li>
+          <li>No telemetry</li>
+        </ul>
+        <p class="hero-note">v0.1.0 · pre-release · Python 3.12+ · MIT</p>
+      </div>
+
+      <figure class="evidence" aria-labelledby="evidence-caption">
+        <span class="evidence-sheet evidence-sheet-back" aria-hidden="true"></span>
+        <span class="evidence-sheet evidence-sheet-middle" aria-hidden="true"></span>
+        <div class="evidence-paper">
+          <div class="sheet-topline">
+            <span>OHF / 004</span>
+            <span>Warranty · 2 pp</span>
+          </div>
+          <p class="sheet-kicker">Document review</p>
+          <p class="sheet-title">Northwind<br>Hardware Ltd</p>
+          <p class="sheet-subtitle">Cordless drill kit · NW-CD18</p>
+
+          <div class="field-card">
+            <span class="field-label">Purchase date</span>
+            <strong class="field-value">14 March 2026</strong>
+            <span class="field-meta">p. 1 · chars 145–158 · 90% confidence</span>
+          </div>
+
+          <div class="source-line">
+            <div class="source-heading">
+              <span>Source</span>
+              <span>Page 1</span>
+            </div>
+            <p>“Purchase date: <mark>14 March 2026</mark>”</p>
+          </div>
+
+          <div class="reminder-card">
+            <div>
+              <span class="reminder-label">Warranty ends</span>
+              <strong>14 March 2028</strong>
+            </div>
+            <span class="status-badge">Suggested</span>
+          </div>
+          <p class="reminder-note">Suggestions stay inactive until you confirm them.</p>
+
+          <div class="sheet-footline">
+            <span>Processed locally</span>
+            <span>SHA-256 · 8b0bf0…37fb63</span>
+          </div>
+          <span class="local-stamp" aria-hidden="true">Kept<br>local</span>
+        </div>
+        <figcaption id="evidence-caption">A synthetic document. Every extracted value points back to the text that supports it.</figcaption>
+      </figure>
+    </section>
+
+    <section class="principles shell" aria-label="What the project promises">
+      <div class="principle">
+        <span class="principle-mark" aria-hidden="true"></span>
+        <div><h2>Local by default</h2><p>One folder on one machine. No account, no sync, no telemetry.</p></div>
+      </div>
+      <div class="principle">
+        <span class="principle-mark" aria-hidden="true"></span>
+        <div><h2>Cited, not guessed</h2><p>If a value cannot point to its page and character range, it is dropped.</p></div>
+      </div>
+      <div class="principle">
+        <span class="principle-mark" aria-hidden="true"></span>
+        <div><h2>Yours to delete</h2><p>Deletion checks the rows and blobs, then reports what remains.</p></div>
+      </div>
+    </section>
+
+    <section class="section shell" id="why" aria-labelledby="why-title">
+      <p class="eyebrow section-eyebrow"><span>01</span> The problem</p>
+      <div class="section-heading-grid">
+        <h2 id="why-title">A warranty PDF is not a warranty you can find.</h2>
+        <div class="section-intro">
+          <p>Household paperwork accumulates in drawers, downloads, and inboxes. The tools that promise to organize it usually ask you to upload it first—then hide the answer behind an account and a summary.</p>
+        </div>
+      </div>
+
+      <div class="why-grid">
+        <div class="why-copy">
+          <p class="why-lede">Open Home File takes the opposite approach. It reads documents on your machine, keeps originals encrypted in a folder you choose, and makes every extracted value prove where it came from. You confirm what matters. The software keeps the receipts.</p>
+          <p>The point is not to automate judgment. The point is to make it checkable.</p>
+        </div>
+
+        <div class="compare" role="group" aria-label="A vague filename versus a cited value">
+          <div class="compare-row">
+            <span class="compare-label">Before</span>
+            <p class="compare-old">warranty_final_v2.pdf</p>
+            <p class="compare-location">somewhere in Downloads</p>
+          </div>
+          <div class="compare-divider"><span>same document</span></div>
+          <div class="compare-row compare-row-after">
+            <span class="compare-label">After</span>
+            <p class="compare-new">14 March 2026</p>
+            <p class="compare-meta">purchase date · p. 1 · chars 145–158 · 90%</p>
+          </div>
+          <p class="compare-note">Only one of these can be checked.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tinted" id="how" aria-labelledby="how-title">
+      <div class="shell">
+        <p class="eyebrow section-eyebrow"><span>02</span> The method</p>
+        <div class="section-heading-grid">
+          <h2 id="how-title">Read it. Check it. Decide.</h2>
+          <div class="section-intro">
+            <p>No magic answers. A small, legible workflow built around evidence, not automation theatre.</p>
+          </div>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <span class="step-number" aria-hidden="true">01</span>
+            <div class="step-body">
+              <h3>Bring the document in</h3>
+              <p>Drop a PDF, PNG, or JPEG into the loopback UI or import it from the CLI. The file is hashed, validated, and parsed, then the original is sealed at rest before any document record is written.</p>
+            </div>
+            <span class="step-tag">PDF · PNG · JPEG</span>
+          </li>
+          <li>
+            <span class="step-number" aria-hidden="true">02</span>
+            <div class="step-body">
+              <h3>Check the evidence</h3>
+              <p>Every field shows its page and character offsets. Confirm it, correct it with a reason, or reject it. The original value stays in an append-only history.</p>
+            </div>
+            <span class="step-tag">Confirm · correct · reject</span>
+          </li>
+          <li>
+            <span class="step-number" aria-hidden="true">03</span>
+            <div class="step-body">
+              <h3>Keep the deadline</h3>
+              <p>A suggested reminder never becomes active on its own. Confirmed reminders keep a link to the field and citation that created them.</p>
+            </div>
+            <span class="step-tag">Suggested → confirmed</span>
+          </li>
+        </ol>
+
+        <figure class="specimen">
+          <div class="specimen-label">
+            <span>The review screen</span>
+            <span>Actual UI · synthetic data</span>
+          </div>
+          <picture>
+            <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="assets/review-mobile-dark.png">
+            <source media="(max-width: 640px)" srcset="assets/review-mobile.png">
+            <source media="(prefers-color-scheme: dark)" srcset="assets/review-desktop-dark.png">
+            <img src="assets/review-desktop.png" width="1440" height="1515" loading="lazy" alt="Open Home File review screen showing a source page, four extracted fields, a highlighted citation, and correction controls.">
+          </picture>
+          <figcaption>Source, extracted fields, citation, and correction in one place. The highlighted span on the left is the exact text the value was read from.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section shell" id="standard" aria-labelledby="standard-title">
+      <p class="eyebrow section-eyebrow"><span>03</span> The standard</p>
+      <div class="section-heading-grid">
+        <h2 id="standard-title">Few promises. Kept in code.</h2>
+        <div class="section-intro">
+          <p>The constraints are the product. These are the ones enforced by tests, not just printed on a page.</p>
+        </div>
+      </div>
+
+      <div class="standard-grid">
+        <article>
+          <span class="standard-index" aria-hidden="true">A</span>
+          <h3>Citation or nothing.</h3>
+          <p>The extractor can be wrong; it cannot be vague. Every accepted field carries a page number, a character range, a confidence score, and the extractor that found it.</p>
+          <p class="standard-meta">Page 1 · chars 145–158</p>
+        </article>
+        <article>
+          <span class="standard-index" aria-hidden="true">B</span>
+          <h3>Local is the default.</h3>
+          <p>No account, no hosted index, no analytics. The web UI binds to loopback, loads no external assets, and the default provider never opens a socket.</p>
+          <p class="standard-meta">127.0.0.1:8765 · no external assets</p>
+        </article>
+        <article>
+          <span class="standard-index" aria-hidden="true">C</span>
+          <h3>Corrections keep their receipts.</h3>
+          <p>Confirm, correct, or reject. The original value, the new value, the actor, and the reason stay in an append-only history that the interface can show you.</p>
+          <p class="standard-meta">Extracted → corrected → confirmed</p>
+        </article>
+        <article>
+          <span class="standard-index" aria-hidden="true">D</span>
+          <h3>Delete means verified.</h3>
+          <p>Deleting a document removes its rows, pages, fields, reminders, exports, and original blob—then queries and file checks report anything left behind.</p>
+          <p class="standard-meta">Rows + blobs checked</p>
+        </article>
+      </div>
+
+      <p class="standard-close">It does not give legal, tax, or financial advice. It does not cancel subscriptions or contact vendors. It makes the paperwork checkable; you decide.</p>
+    </section>
+
+    <section class="hood" id="under-the-hood" aria-labelledby="hood-title">
+      <div class="shell">
+        <p class="eyebrow hood-eyebrow"><span>04</span> Under the hood</p>
+        <div class="hood-grid">
+          <div class="hood-copy">
+            <h2 id="hood-title">Built like a filing cabinet, not a funnel.</h2>
+            <p>One Python process. One SQLite database. A folder of AES-256-GCM sealed originals. The CLI and the loopback UI are thin adapters over the same Library, so there is one set of rules for reading, correcting, and deleting.</p>
+            <p>Remote provider calls are optional, budgeted, and ledgered. In the default configuration, there are no remote provider calls at all.</p>
+            <a class="text-link hood-link" href="https://github.com/r-bug-r/open-home-file/blob/master/docs/architecture.md">Read the architecture <span aria-hidden="true">↗</span></a>
+          </div>
+
+          <div class="system-card" role="img" aria-label="Architecture: the CLI and loopback UI call one Library. State lives in SQLite with full-text search and AES-256-GCM encrypted blobs. Provider calls are off by default and pass through a budget guard.">
+            <div class="system-top">
+              <span>CLI</span>
+              <span>Loopback UI</span>
+            </div>
+            <div class="system-arrow" aria-hidden="true">↓</div>
+            <div class="system-core">
+              <span>Library</span>
+              <small>the only writer</small>
+            </div>
+            <div class="system-arrow" aria-hidden="true">↓</div>
+            <div class="system-grid">
+              <div class="system-cell">
+                <span>SQLite + FTS5</span>
+                <small>metadata · page text · history</small>
+              </div>
+              <div class="system-cell">
+                <span>AES-256-GCM</span>
+                <small>content-addressed originals</small>
+              </div>
+            </div>
+            <div class="system-provider">
+              <span>Provider guard</span>
+              <small>off by default · budgeted · ledgered</small>
+            </div>
+            <div class="system-foot">
+              <span>Schema 4</span>
+              <span>Python 3.12</span>
+              <span>Stdlib HTTP server</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hood-stats">
+          <div><strong>0</strong><span>external network calls by default</span></div>
+          <div><strong>1</strong><span>SQLite file for the index</span></div>
+          <div><strong>100%</strong><span>of accepted fields are cited</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell" id="install" aria-labelledby="install-title">
+      <p class="eyebrow section-eyebrow"><span>05</span> Take it home</p>
+      <div class="install-grid">
+        <div class="install-copy">
+          <h2 id="install-title">Start with a folder.<br>End with a paper trail.</h2>
+          <p>Open Home File is pre-release software. There is no package on PyPI yet; the repository is the release. The synthetic samples are generated locally, so the first import contains no real household data.</p>
+          <div class="install-meta">
+            <span>Pre-release 0.1.0</span>
+            <span>Python 3.12+</span>
+            <span>MIT licensed</span>
+          </div>
+          <a class="text-link" href="https://github.com/r-bug-r/open-home-file#60-second-quickstart">Read the full quickstart <span aria-hidden="true">↗</span></a>
+        </div>
+
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="terminal-label">Quickstart</span>
+            <button class="copy-button" type="button" data-copy-target="install-command">Copy</button>
+          </div>
+          <pre id="install-command" tabindex="0"><code><span class="code-comment"># clone and enter the repository</span>
+git clone https://github.com/r-bug-r/open-home-file.git
+cd open-home-file
+
+<span class="code-comment"># create and activate a virtual environment</span>
+python -m venv .venv
+source .venv/bin/activate
+<span class="code-comment"># Windows PowerShell: .venv\Scripts\Activate.ps1</span>
+
+pip install -e .
+homefile samples ./samples
+homefile import ./samples/warranty.pdf
+homefile serve</code></pre>
+          <p class="terminal-note">Open <a href="http://127.0.0.1:8765">127.0.0.1:8765</a>. Ctrl+C stops it. OCR is optional and needs a local Tesseract install.</p>
+        </div>
+      </div>
+
+      <aside class="limits" aria-labelledby="limits-title">
+        <p class="eyebrow"><span>Read this first</span></p>
+        <h2 id="limits-title">Honest limits.</h2>
+        <ul>
+          <li><span>01</span>It does not give legal, financial, tax, or insurance advice, and it does not interpret contract terms.</li>
+          <li><span>02</span>It does not cancel subscriptions, make payments, or contact vendors.</li>
+          <li><span>03</span>It is a single-user local install. There are no accounts, sharing, sync, or remote access.</li>
+          <li><span>04</span>OCR is optional. Pages it cannot read are flagged, not filled with guessed text.</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="closing shell" aria-labelledby="closing-title">
+      <div>
+        <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span>Open source · local by default</p>
+        <h2 id="closing-title">Bring the paper trail home.</h2>
+      </div>
+      <div class="closing-actions">
+        <a class="button" href="https://github.com/r-bug-r/open-home-file">View on GitHub</a>
+        <a class="text-link" href="https://github.com/r-bug-r/open-home-file#60-second-quickstart">Read the quickstart <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="#top">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M6.5 4.5h14.2l5.3 5.3v17.7h-19.5z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M20.5 4.5v5.5h5.5M11 15h11M11 19h11M11 23h7" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M11 10.5h4" stroke="var(--rust)" stroke-width="1.5"/>
+            </svg>
+            <span>Open Home File</span>
+          </a>
+          <p>Household paperwork, kept locally.</p>
+        </div>
+        <nav class="footer-nav" aria-label="Footer">
+          <a href="https://github.com/r-bug-r/open-home-file">Repository</a>
+          <a href="https://github.com/r-bug-r/open-home-file/tree/master/docs">Documentation</a>
+          <a href="https://github.com/r-bug-r/open-home-file/blob/master/docs/privacy.md">Privacy</a>
+          <a href="https://github.com/r-bug-r/open-home-file/blob/master/LICENSE">License</a>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <p>© 2026 Open Home File contributors. No cookies, no analytics, no third-party requests on this page.</p>
+        <p class="footer-stamp">Local only</p>
+        <p>Type: Fraunces &amp; Public Sans, SIL OFL.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

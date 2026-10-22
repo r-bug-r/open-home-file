@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from . import crypto, db, parsers
+from . import crypto, db, fixtures, parsers
 from . import inspect as file_inspect
 from .classify import classify_text
 from .config import Settings
@@ -64,6 +64,33 @@ MODEL_PROMPT = (
 )
 MODEL_TEXT_LIMIT = 6000
 MODEL_CONFIDENCE_CEILING = 0.6
+
+_REMINDER_SELECT = (
+    "SELECT r.*, COALESCE(NULLIF(d.title, ''), d.filename, '') AS doc_label"
+    " FROM reminders r LEFT JOIN documents d ON d.id = r.doc_id"
+)
+
+
+@dataclass(slots=True)
+class ImportRecord:
+    """One row of the import audit trail, as shown in the UI."""
+
+    id: str
+    filename: str
+    status: str
+    error: str | None
+    imported_at: datetime
+    doc_id: str | None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "filename": self.filename,
+            "status": self.status,
+            "error": self.error,
+            "imported_at": self.imported_at.isoformat(),
+            "doc_id": self.doc_id,
+        }
 
 
 @dataclass(slots=True)
@@ -161,6 +188,16 @@ def _iso(value: datetime) -> str:
 
 
 def _row_to_document(row: Any) -> Document:
+    keys = row.keys()
+    warnings: list[str] = []
+    raw_warnings = row["warnings"] if "warnings" in keys else "[]"
+    if raw_warnings:
+        try:
+            parsed = json.loads(raw_warnings)
+        except (TypeError, ValueError):
+            parsed = []
+        if isinstance(parsed, list):
+            warnings = [str(item) for item in parsed]
     return Document(
         id=row["id"],
         sha256=row["sha256"],
@@ -172,6 +209,8 @@ def _row_to_document(row: Any) -> Document:
         doc_type_confidence=row["doc_type_confidence"],
         imported_at=datetime.fromisoformat(row["imported_at"]),
         title=row["title"],
+        processed_by=row["processed_by"] if "processed_by" in keys else "",
+        warnings=warnings,
     )
 
 
@@ -202,6 +241,7 @@ def _row_to_field(row: Any) -> ExtractedField:
 
 
 def _row_to_reminder(row: Any) -> Reminder:
+    keys = row.keys()
     return Reminder(
         id=row["id"],
         doc_id=row["doc_id"],
@@ -215,6 +255,7 @@ def _row_to_reminder(row: Any) -> Reminder:
         created_at=datetime.fromisoformat(row["created_at"]),
         confirmed_at=datetime.fromisoformat(row["confirmed_at"]) if row["confirmed_at"] else None,
         confirmed_by=row["confirmed_by"],
+        doc_label=row["doc_label"] if "doc_label" in keys else "",
     )
 
 
@@ -326,20 +367,23 @@ class Library:
 
         candidates = parsers.extract_candidates(extracted.pages, date_order)
         warnings = list(extracted.warnings)
+        processed_by = ""
         if use_model:
-            candidates, model_warnings = self._model_candidates(
+            candidates, model_warnings, processed_by = self._model_candidates(
                 extracted.pages, candidates, date_order
             )
             warnings.extend(model_warnings)
         if self._provider_error:
             warnings.append(f"model provider unavailable: {self._provider_error}")
+        document.processed_by = processed_by
 
         fields: list[ExtractedField] = []
         reminders: list[Reminder] = []
         with db.transaction(self.settings.db_path) as conn:
             conn.execute(
                 "INSERT INTO documents(id, sha256, filename, media_type, size_bytes, page_count,"
-                " doc_type, doc_type_confidence, imported_at, title) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                " doc_type, doc_type_confidence, imported_at, title, processed_by, warnings)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     document.id,
                     document.sha256,
@@ -351,6 +395,8 @@ class Library:
                     document.doc_type_confidence,
                     _iso(document.imported_at),
                     document.title,
+                    document.processed_by,
+                    json.dumps(warnings),
                 ),
             )
             for page in extracted.pages:
@@ -462,6 +508,11 @@ class Library:
                     ),
                 )
                 reminders.append(reminder)
+            document.warnings = list(warnings)
+            conn.execute(
+                "UPDATE documents SET warnings = ? WHERE id = ?",
+                (json.dumps(document.warnings), doc_id),
+            )
             self._record_import(
                 import_id, inspection.sha256, safe_name, doc_id, "imported", None, conn=conn
             )
@@ -500,18 +551,20 @@ class Library:
         pages: list[Page],
         existing: list[parsers.Candidate],
         date_order: parsers.DateOrder,
-    ) -> tuple[list[parsers.Candidate], list[str]]:
+    ) -> tuple[list[parsers.Candidate], list[str], str]:
         """Add model suggestions only where deterministic parsing found nothing.
 
         A suggestion is accepted only when its quote appears verbatim in the
         cited page, so the citation validator - not the model - decides truth.
+        The third element names the provider that actually saw the text, or
+        ``""`` when no request was made or it failed.
         """
         provider = self.provider()
         if provider is None:
-            return existing, []
+            return existing, [], ""
         text = "\n".join(page.text for page in pages)[:MODEL_TEXT_LIMIT]
         if not text.strip():
-            return existing, []
+            return existing, [], ""
         guard = ProviderGuard(self.settings, provider, workflow="extract")
         request = CompletionRequest(
             prompt=f"{MODEL_PROMPT}\n---DOCUMENT---\n{text}",
@@ -522,7 +575,7 @@ class Library:
             response = guard.complete(request)
             payload = validate_extraction_payload(response.text)
         except ProviderError as exc:
-            return existing, [f"model extraction skipped: {exc}"]
+            return existing, [f"model extraction skipped: {exc}"], ""
 
         known = {candidate.name for candidate in existing}
         added: list[parsers.Candidate] = []
@@ -558,7 +611,7 @@ class Library:
                 )
             )
             known.add(name)
-        return existing + added, warnings
+        return existing + added, warnings, response.provider if provider.is_remote else ""
 
     # --------------------------------------------------------------- read side
     def _find_by_hash(self, sha256: str) -> Document | None:
@@ -570,6 +623,45 @@ class Library:
         with db.session(self.settings.db_path) as conn:
             rows = conn.execute("SELECT * FROM documents ORDER BY imported_at DESC").fetchall()
         return [_row_to_document(row) for row in rows]
+
+    def recent_imports(self, limit: int = 8) -> list[ImportRecord]:
+        """Return the newest import attempts, newest first.
+
+        Failed and duplicate attempts are included: the home page shows what
+        happened to each chosen file instead of only a count.
+        """
+        with db.session(self.settings.db_path) as conn:
+            rows = conn.execute(
+                "SELECT * FROM imports ORDER BY imported_at DESC, rowid DESC LIMIT ?",
+                (max(1, min(limit, 50)),),
+            ).fetchall()
+        return [
+            ImportRecord(
+                id=row["id"],
+                filename=row["filename"],
+                status=row["status"],
+                error=row["error"],
+                imported_at=datetime.fromisoformat(row["imported_at"]),
+                doc_id=row["doc_id"],
+            )
+            for row in rows
+        ]
+
+    def import_samples(self) -> list[ImportOutcome]:
+        """Import the three synthetic fixtures for a safe first run.
+
+        The bytes are generated in memory and go through the normal import
+        path, so samples exercise the same validation, encryption, and
+        citation checks as a user file.
+        """
+        outcomes: list[ImportOutcome] = []
+        for name, payload in (
+            ("sample-receipt.pdf", fixtures.receipt_pdf()),
+            ("sample-warranty.pdf", fixtures.warranty_pdf()),
+            ("sample-subscription.pdf", fixtures.subscription_pdf()),
+        ):
+            outcomes.append(self.import_bytes(payload, name, actor="local-user"))
+        return outcomes
 
     def get_document(self, doc_id: str) -> DocumentDetail:
         with db.session(self.settings.db_path) as conn:
@@ -585,7 +677,7 @@ class Library:
                 "SELECT * FROM fields WHERE doc_id = ? ORDER BY name, confidence DESC", (doc_id,)
             ).fetchall()
             reminder_rows = conn.execute(
-                "SELECT * FROM reminders WHERE doc_id = ? ORDER BY due_date", (doc_id,)
+                f"{_REMINDER_SELECT} WHERE r.doc_id = ? ORDER BY r.due_date", (doc_id,)
             ).fetchall()
         return DocumentDetail(
             document=_row_to_document(row),
@@ -743,7 +835,12 @@ class Library:
                     f"  WHERE f.doc_id = d.id AND {primary} LIMIT 1) AS field_id"
                     " FROM documents d"
                 )
-                field_params: list[Any] = [*primary_params, *primary_params, *primary_params, *primary_params]
+                field_params: list[Any] = [
+                    *primary_params,
+                    *primary_params,
+                    *primary_params,
+                    *primary_params,
+                ]
                 if doc_filter:
                     sql += f" WHERE {doc_filter}"
                     field_params.extend(group_params)
@@ -917,19 +1014,19 @@ class Library:
 
     # --------------------------------------------------------------- reminders
     def list_reminders(self, status: str | None = None) -> list[Reminder]:
-        sql = "SELECT * FROM reminders"
+        sql = _REMINDER_SELECT
         args: list[Any] = []
         if status:
-            sql += " WHERE status = ?"
+            sql += " WHERE r.status = ?"
             args.append(status)
-        sql += " ORDER BY due_date"
+        sql += " ORDER BY r.due_date"
         with db.session(self.settings.db_path) as conn:
             rows = conn.execute(sql, args).fetchall()
         return [_row_to_reminder(row) for row in rows]
 
     def _get_reminder_row(self, reminder_id: str) -> Any:
         with db.session(self.settings.db_path) as conn:
-            row = conn.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+            row = conn.execute(f"{_REMINDER_SELECT} WHERE r.id = ?", (reminder_id,)).fetchone()
         if row is None:
             raise NotFound(f"reminder {reminder_id} does not exist")
         return row
@@ -1049,8 +1146,8 @@ class Library:
         today = (on or _now().date()).isoformat()
         with db.session(self.settings.db_path) as conn:
             rows = conn.execute(
-                "SELECT * FROM reminders WHERE status = 'confirmed' AND due_date <= ?"
-                " ORDER BY due_date",
+                f"{_REMINDER_SELECT} WHERE r.status = 'confirmed' AND r.due_date <= ?"
+                " ORDER BY r.due_date",
                 (today,),
             ).fetchall()
         return [_row_to_reminder(row) for row in rows]
@@ -1104,6 +1201,60 @@ class Library:
             target.write_bytes(bundle)
         return target
 
+    def export_library(self, passphrase: str | None = None) -> Path:
+        """Export every document, its metadata, reminders, and original bytes.
+
+        The archive contains ``metadata.json`` (documents, fields, reminders,
+        page text) and one decrypted original per distinct content hash. It is
+        a portable backup, not an encrypted-at-rest copy, unless a passphrase
+        is supplied.
+        """
+        documents = self.list_documents()
+        payload_documents: list[dict[str, Any]] = []
+        originals: dict[str, tuple[str, bytes]] = {}
+        for document in documents:
+            detail = self.get_document(document.id)
+            payload_documents.append(
+                {
+                    "document": document.to_json(),
+                    "fields": [item.to_json() for item in detail.fields],
+                    "reminders": [item.to_json() for item in detail.reminders],
+                    "pages": [
+                        {"page": page.number, "source": str(page.source), "text": page.text}
+                        for page in detail.pages
+                    ],
+                }
+            )
+            if document.sha256 not in originals:
+                originals[document.sha256] = (
+                    document.filename,
+                    self.store.get(document.sha256),
+                )
+        payload = {
+            "format": "open-home-file/library-export/1",
+            "exported_at": _iso(_now()),
+            "counts": {
+                "documents": len(payload_documents),
+                "originals": len(originals),
+            },
+            "documents": payload_documents,
+        }
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("metadata.json", json.dumps(payload, indent=2, sort_keys=True))
+            for sha256, (filename, data) in originals.items():
+                archive.writestr(f"originals/{sha256[:16]}-{filename}", data)
+        bundle = buffer.getvalue()
+        self.settings.export_dir.mkdir(parents=True, exist_ok=True)
+        stamp = _now().strftime("%Y%m%dT%H%M%SZ")
+        if passphrase:
+            target = self.settings.export_dir / f"library-{stamp}.hfe"
+            target.write_bytes(crypto.seal_with_passphrase(passphrase, bundle))
+        else:
+            target = self.settings.export_dir / f"library-{stamp}.zip"
+            target.write_bytes(bundle)
+        return target
+
     @staticmethod
     def read_export(path: Path, passphrase: str | None = None) -> dict[str, Any]:
         blob = Path(path).read_bytes()
@@ -1119,7 +1270,7 @@ class Library:
             originals = {
                 name: hashlib.sha256(archive.read(name)).hexdigest()
                 for name in names
-                if name.startswith("original/")
+                if name.startswith(("original/", "originals/"))
             }
         return {"files": names, "metadata": metadata, "original_hashes": originals}
 
@@ -1229,7 +1380,9 @@ class Library:
 
     def delete_all(self, *, actor: str = "local-user") -> list[DeletionReport]:
         """Delete every document and its derived data, verifying each deletion."""
-        reports = [self.delete_document(document.id, actor=actor) for document in self.list_documents()]
+        reports = [
+            self.delete_document(document.id, actor=actor) for document in self.list_documents()
+        ]
         for leftover in self.settings.export_dir.glob("*"):
             if leftover.is_file():
                 leftover.unlink()
